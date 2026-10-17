@@ -21,13 +21,69 @@ data class InternProfile(
     val phone: String,
     val college: String,
     val joiningDate: LocalDate,
-    val department: String = "Plant Automation & IT",
+    val department: String = "HRD Department",
     val groupId: String? = null,
     val groupName: String? = null,
+    val internIdNumber: String? = null,
     val mentorName: String = "DGM Plant Operations",
-    val address: String = "SAIL Intern Hostel, Sector 4",
-    val emergencyContact: String = "+91 98765 43210"
+    val address: String = "",
+    val emergencyContact: String = "",
+    val authProvider: String = "EMAIL" // "GOOGLE" or "EMAIL"
+) {
+    val isProfileComplete: Boolean
+        get() = fullName.isNotBlank() &&
+                phone.isNotBlank() &&
+                college.isNotBlank() &&
+                department.isNotBlank() &&
+                !internIdNumber.isNullOrBlank()
+}
+
+val SAIL_DEPARTMENTS = listOf(
+    "HRD Department",
+    "Plant Engineering & Maintenance",
+    "Blast Furnace & Iron Making",
+    "Steel Melting Shop (SMS)",
+    "Rolling Mills",
+    "IT & Automation Systems",
+    "Safety & Environment",
+    "Quality Assurance & R&D"
 )
+
+enum class QrTargetAudience(val label: String) {
+    ALL("All Interns"),
+    DEPARTMENT("Specific Department"),
+    GROUP("Specific Book Group")
+}
+
+data class AttendanceQrPayload(
+    val date: LocalDate,
+    val token: String,
+    val audience: QrTargetAudience,
+    val targetValue: String,
+    val expiryTimestamp: Long
+) {
+    fun toSerializedString(): String {
+        return "SAIL_ATTENDANCE_QR:${date}:${token}:${audience.name}:${targetValue}:${expiryTimestamp}"
+    }
+
+    companion object {
+        fun parse(payload: String): AttendanceQrPayload? {
+            if (!payload.startsWith("SAIL_ATTENDANCE_QR:")) return null
+            val parts = payload.split(":")
+            if (parts.size < 6) return null
+            return try {
+                val date = LocalDate.parse(parts[1])
+                val token = parts[2]
+                val audience = QrTargetAudience.valueOf(parts[3])
+                val targetValue = parts[4]
+                val expiryTimestamp = parts[5].toLong()
+                AttendanceQrPayload(date, token, audience, targetValue, expiryTimestamp)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+}
 
 data class InternGroup(
     val id: String,

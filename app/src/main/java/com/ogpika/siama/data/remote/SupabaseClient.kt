@@ -97,9 +97,14 @@ object SupabaseClient {
                     val fullName = obj.optString("full_name", "")
                     val phone = obj.optString("phone", "")
                     val college = obj.optString("college", "")
-                    val dept = obj.optString("department", "General")
+                    val dept = obj.optString("department", "HRD Department")
                     val groupId = obj.optString("group_id", "").ifBlank { null }
                     val groupName = obj.optString("group_name", "").ifBlank { null }
+                    val internIdNum = obj.optString("intern_id_number", "").ifBlank { null }
+                    val mentor = obj.optString("mentor_name", "DGM Plant Operations")
+                    val addr = obj.optString("address", "")
+                    val emergency = obj.optString("emergency_contact", "")
+                    val authProv = obj.optString("auth_provider", "EMAIL")
                     val joiningStr = obj.optString("internship_start_date", "")
 
                     val joiningDate = try {
@@ -118,7 +123,12 @@ object SupabaseClient {
                             joiningDate = joiningDate,
                             department = dept,
                             groupId = groupId,
-                            groupName = groupName
+                            groupName = groupName,
+                            internIdNumber = internIdNum,
+                            mentorName = mentor,
+                            address = addr,
+                            emergencyContact = emergency,
+                            authProvider = authProv
                         )
                     )
                 }
@@ -140,13 +150,49 @@ object SupabaseClient {
             put("phone", profile.phone)
             put("college", profile.college)
             put("department", profile.department)
+            put("intern_id_number", profile.internIdNumber ?: profile.id)
             put("internship_start_date", profile.joiningDate.toString())
             put("internship_end_date", profile.joiningDate.plusMonths(6).toString())
             if (profile.groupId != null) put("group_id", profile.groupId)
             if (profile.groupName != null) put("group_name", profile.groupName)
+            put("address", profile.address)
+            put("emergency_contact", profile.emergencyContact)
+            put("auth_provider", profile.authProvider)
         }
 
         val request = buildRequest("profiles", "POST", json.toString()) ?: return@withContext false
+        try {
+            val response = httpClient.newCall(request).execute()
+            response.isSuccessful
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Complete mandatory profile onboarding
+     */
+    suspend fun updateMandatoryProfile(
+        id: String,
+        fullName: String,
+        phone: String,
+        college: String,
+        department: String,
+        internIdNumber: String,
+        emergencyContact: String,
+        address: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        val json = JSONObject().apply {
+            put("full_name", fullName)
+            put("phone", phone)
+            put("college", college)
+            put("department", department)
+            put("intern_id_number", internIdNumber)
+            put("emergency_contact", emergencyContact)
+            put("address", address)
+        }
+        val request = buildRequest("profiles?id=eq.$id", "PATCH", json.toString()) ?: return@withContext false
         try {
             val response = httpClient.newCall(request).execute()
             response.isSuccessful
@@ -202,6 +248,35 @@ object SupabaseClient {
         }
 
         val request = buildRequest("attendance_logs", "POST", json.toString(), "resolution=merge-duplicates") ?: return@withContext false
+        try {
+            val response = httpClient.newCall(request).execute()
+            response.isSuccessful
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Submit leave application to Supabase
+     */
+    suspend fun submitLeaveApplication(
+        applicationId: String,
+        internId: String,
+        startDate: LocalDate,
+        endDate: LocalDate,
+        totalDays: Double,
+        reason: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        val json = JSONObject().apply {
+            put("intern_id", internId)
+            put("start_date", startDate.toString())
+            put("end_date", endDate.toString())
+            put("total_days", totalDays)
+            put("reason", reason)
+            put("status", "PENDING")
+        }
+        val request = buildRequest("leave_applications", "POST", json.toString()) ?: return@withContext false
         try {
             val response = httpClient.newCall(request).execute()
             response.isSuccessful

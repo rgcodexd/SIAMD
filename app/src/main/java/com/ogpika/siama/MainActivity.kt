@@ -26,6 +26,7 @@ import com.ogpika.siama.ui.components.SupabaseConnectionDialog
 import com.ogpika.siama.ui.screens.AdminPortalScreen
 import com.ogpika.siama.ui.screens.InternAttendanceScreen
 import com.ogpika.siama.ui.screens.LoginScreen
+import com.ogpika.siama.ui.screens.OnboardingProfileScreen
 import com.ogpika.siama.ui.theme.SIAMATheme
 
 class MainActivity : ComponentActivity() {
@@ -48,10 +49,11 @@ class MainActivity : ComponentActivity() {
 fun MainAppNavigationRoot() {
     val isLoggedIn by AttendanceSystemRepository.isLoggedIn.collectAsState()
     val currentUserRole by AttendanceSystemRepository.currentUserRole.collectAsState()
+    val needsOnboarding by AttendanceSystemRepository.needsOnboarding.collectAsState()
     val isDarkMode by AttendanceSystemRepository.isDarkMode.collectAsState()
     var showSupabaseDialog by remember { mutableStateOf(false) }
 
-    Crossfade(targetState = isLoggedIn, label = "authCrossfade") { loggedIn ->
+    Crossfade(targetState = isLoggedIn to needsOnboarding, label = "authCrossfade") { (loggedIn, onboarding) ->
         if (!loggedIn) {
             LoginScreen(
                 isDarkMode = isDarkMode,
@@ -81,7 +83,11 @@ fun MainAppNavigationRoot() {
                             AdminPortalScreen()
                         }
                         UserRole.INTERN -> {
-                            InternAttendanceScreen()
+                            if (onboarding) {
+                                OnboardingProfileScreen()
+                            } else {
+                                InternAttendanceScreen()
+                            }
                         }
                         null -> {
                             LoginScreen(

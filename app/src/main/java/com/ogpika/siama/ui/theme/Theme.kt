@@ -8,37 +8,41 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = DarkAccent,
+    primary = DarkPrimary,
     onPrimary = Color.Black,
-    primaryContainer = Color(0xFF064E3B),
-    onPrimaryContainer = Color(0xFFA7F3D0),
-    secondary = DarkTextSecondary,
-    onSecondary = DarkBackground,
+    primaryContainer = DarkSurfaceElevated,
+    onPrimaryContainer = DarkTextPrimary,
+    secondary = DarkAccent,
+    onSecondary = Color.Black,
     background = DarkBackground,
     onBackground = DarkTextPrimary,
-    surface = DarkCard,
+    surface = DarkSurface,
     onSurface = DarkTextPrimary,
-    surfaceVariant = DarkCardElevated,
+    surfaceVariant = DarkSurfaceElevated,
     onSurfaceVariant = DarkTextSecondary,
     outline = DarkBorder,
-    outlineVariant = DarkBorderSubtle
+    outlineVariant = DarkBorderSubtle,
+    error = StatusAbsent,
+    onError = Color.White
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = LightAccent,
+    primary = LightPrimary,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFD1FAE5),
-    onPrimaryContainer = Color(0xFF065F46),
-    secondary = LightTextSecondary,
-    onSecondary = LightBackground,
+    primaryContainer = LightSurfaceElevated,
+    onPrimaryContainer = LightTextPrimary,
+    secondary = LightAccent,
+    onSecondary = Color.White,
     background = LightBackground,
     onBackground = LightTextPrimary,
-    surface = LightCard,
+    surface = LightSurface,
     onSurface = LightTextPrimary,
-    surfaceVariant = LightCardElevated,
+    surfaceVariant = LightSurfaceElevated,
     onSurfaceVariant = LightTextSecondary,
     outline = LightBorder,
-    outlineVariant = LightBorderSubtle
+    outlineVariant = LightBorderSubtle,
+    error = StatusAbsent,
+    onError = Color.White
 )
 
 @Composable

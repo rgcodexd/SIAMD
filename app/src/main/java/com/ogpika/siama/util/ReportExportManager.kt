@@ -289,7 +289,6 @@ object ReportExportManager {
         try {
             context.startActivity(intent)
         } catch (e: Exception) {
-            // If WhatsApp is not installed, fallback to general share chooser
             val fallback = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, message)
@@ -297,4 +296,26 @@ object ReportExportManager {
             context.startActivity(Intent.createChooser(fallback, "Share Group Invite via"))
         }
     }
+
+    /**
+     * Share arbitrary text (such as daily QR token and instructions) via WhatsApp or general share sheet.
+     */
+    fun shareGenericMessage(context: Context, message: String) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, message)
+            setPackage("com.whatsapp")
+        }
+
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            val fallback = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, message)
+            }
+            context.startActivity(Intent.createChooser(fallback, "Share via"))
+        }
+    }
 }
+

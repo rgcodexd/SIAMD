@@ -1,6 +1,9 @@
 package com.ogpika.siama.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -27,18 +31,22 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,10 +58,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.ogpika.siama.data.AttendanceSystemRepository
 import com.ogpika.siama.data.remote.SupabaseConfig
 import com.ogpika.siama.ui.components.SupabaseConnectionDialog
@@ -67,9 +77,10 @@ fun LoginScreen(
 ) {
     var selectedRoleTab by remember { mutableIntStateOf(0) } // 0 = Intern, 1 = Admin
 
-    // Intern Login/Register states (clean, zero dummy defaults)
+    // Intern states
     var isRegisterMode by remember { mutableStateOf(false) }
     var internEmail by remember { mutableStateOf("") }
+    var showGoogleAccountModal by remember { mutableStateOf(false) }
 
     // Registration mandatory fields
     var regName by remember { mutableStateOf("") }
@@ -79,8 +90,8 @@ fun LoginScreen(
     var regDept by remember { mutableStateOf("") }
 
     // Admin states
-    var adminEmail by remember { mutableStateOf("") }
-    var adminPassword by remember { mutableStateOf("") }
+    var adminEmail by remember { mutableStateOf("admin@sail.in") }
+    var adminPassword by remember { mutableStateOf("admin123") }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showSupabaseDialog by remember { mutableStateOf(false) }
@@ -97,51 +108,79 @@ fun LoginScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Bar with Supabase DB Config & Theme Toggle
+            // ShikshaOne Top Bar: Micro Badge + Config Icons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                    shape = RoundedCornerShape(9999.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(9999.dp))
                 ) {
-                    Text(
-                        text = "Steel Authority of India Limited",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.secondary)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Steel Authority of India Limited",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { showSupabaseDialog = true }) {
+                    IconButton(
+                        onClick = { showSupabaseDialog = true },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Cloud,
                             contentDescription = "Supabase DB Config",
-                            tint = if (SupabaseConfig.isConfigured()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (SupabaseConfig.isConfigured()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    IconButton(onClick = onToggleTheme) {
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    IconButton(
+                        onClick = onToggleTheme,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
                         Icon(
                             imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
                             contentDescription = "Toggle theme",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            // App Logo & Headline
+            // App Emblem
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
@@ -149,99 +188,173 @@ fun LoginScreen(
                     imageVector = Icons.Default.Business,
                     contentDescription = "SAIL Emblem",
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(34.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 text = "SAIL SIAMD",
-                fontSize = 24.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
 
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-                text = "Intern Attendance & Verification Platform",
-                fontSize = 12.sp,
+                text = "Intern Attendance & Resource Portal",
+                fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Role Selector: Intern vs Admin
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            // Role Selector Tab (Pill styling from ShikshaOne)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
             ) {
-                PrimaryTabRow(
-                    selectedTabIndex = selectedRoleTab,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.primary
+                Row(
+                    modifier = Modifier.padding(4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Tab(
-                        selected = selectedRoleTab == 0,
-                        onClick = {
-                            selectedRoleTab = 0
-                            errorMessage = null
-                        },
-                        text = {
-                            Text(
-                                "Intern Portal",
-                                fontWeight = if (selectedRoleTab == 0) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedRoleTab == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    )
-                    Tab(
-                        selected = selectedRoleTab == 1,
-                        onClick = {
-                            selectedRoleTab = 1
-                            errorMessage = null
-                        },
-                        text = {
-                            Text(
-                                "Admin Portal",
-                                fontWeight = if (selectedRoleTab == 1) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedRoleTab == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selectedRoleTab == 0) MaterialTheme.colorScheme.surface else Color.Transparent)
+                            .clickable {
+                                selectedRoleTab = 0
+                                errorMessage = null
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Intern Portal",
+                            fontSize = 13.sp,
+                            fontWeight = if (selectedRoleTab == 0) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selectedRoleTab == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (selectedRoleTab == 1) MaterialTheme.colorScheme.surface else Color.Transparent)
+                            .clickable {
+                                selectedRoleTab = 1
+                                errorMessage = null
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Admin Portal",
+                            fontSize = 13.sp,
+                            fontWeight = if (selectedRoleTab == 1) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selectedRoleTab == 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Card Container for Form
+            // Main Authentication Form Card
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(20.dp)),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp)
+                        .padding(22.dp)
                 ) {
                     if (selectedRoleTab == 0) {
-                        // INTERN TAB
+                        // ==================== INTERN FLOW ====================
+                        Text(
+                            text = if (isRegisterMode) "Create Intern ID" else "Intern Sign In",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isRegisterMode)
+                                "Complete mandatory fields to register on SAIL system"
+                            else
+                                "Sign in via Google OAuth or your registered SAIL intern email",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
                         if (!isRegisterMode) {
-                            // Existing Intern Sign In
-                            Text(
-                                text = "Intern Sign In",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Sign in with your registered email to view attendance",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            // Primary Option: Google OAuth Sign-In (Requirement 2.B)
+                            OutlinedButton(
+                                onClick = { showGoogleAccountModal = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                colors = ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    // Google Multi-color G Icon representation
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = "G",
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 14.sp,
+                                                color = Color(0xFF4285F4)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "Continue with Google",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Subtle Divider
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outline)
+                                Text(
+                                    text = "OR",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 12.dp)
+                                )
+                                HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outline)
+                            }
 
                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -255,7 +368,7 @@ fun LoginScreen(
                                 placeholder = { Text("e.g. intern@domain.com", fontSize = 11.sp) },
                                 leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 singleLine = true
                             )
 
@@ -269,19 +382,19 @@ fun LoginScreen(
                                     }
                                     val success = AttendanceSystemRepository.loginAsIntern(internEmail)
                                     if (!success) {
-                                        errorMessage = "Email not found. If this is your first time, please click 'Create Intern ID' below."
+                                        errorMessage = "Email not found. If first time, tap 'Continue with Google' or 'Create Intern ID' below."
                                     }
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
-                                Text("Sign In", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+                                Text("Sign In with Email", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                             }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             TextButton(
                                 onClick = {
@@ -292,31 +405,17 @@ fun LoginScreen(
                             ) {
                                 Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("First Time Intern? Create Intern ID", fontSize = 12.sp)
+                                Text("New Intern? Register & Generate ID", fontSize = 12.sp)
                             }
                         } else {
-                            // First time registration
-                            Text(
-                                text = "Create Intern ID",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Fill in mandatory details to generate your official SAIL intern ID",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
+                            // Register Form
                             OutlinedTextField(
                                 value = regName,
                                 onValueChange = { regName = it },
                                 label = { Text("Full Name *") },
                                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 singleLine = true
                             )
 
@@ -328,7 +427,7 @@ fun LoginScreen(
                                 label = { Text("Email Address *") },
                                 leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 singleLine = true
                             )
 
@@ -340,7 +439,7 @@ fun LoginScreen(
                                 label = { Text("Phone Number *") },
                                 leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 singleLine = true
                             )
 
@@ -352,7 +451,7 @@ fun LoginScreen(
                                 label = { Text("College / Institute *") },
                                 leadingIcon = { Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 singleLine = true
                             )
 
@@ -361,10 +460,9 @@ fun LoginScreen(
                             OutlinedTextField(
                                 value = regDept,
                                 onValueChange = { regDept = it },
-                                label = { Text("Department / Plant Area *") },
-                                placeholder = { Text("e.g. Blast Furnace, IT & Automation", fontSize = 11.sp) },
+                                label = { Text("Department (e.g. HRD, Automation) *") },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 singleLine = true
                             )
 
@@ -388,7 +486,7 @@ fun LoginScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text("Generate ID & Enter Portal", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
@@ -407,15 +505,15 @@ fun LoginScreen(
                             }
                         }
                     } else {
-                        // ADMIN TAB
+                        // ==================== ADMIN FLOW (Requirement 2.A) ====================
                         Text(
                             text = "Admin & Maintainer Sign In",
-                            fontSize = 16.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Manage groups, interns, QR codes, and monthly attendance reports",
+                            text = "Default Credentials: admin@sail.in / admin123",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -426,10 +524,10 @@ fun LoginScreen(
                             value = adminEmail,
                             onValueChange = { adminEmail = it },
                             label = { Text("Admin Email") },
-                            placeholder = { Text("admin@sail.in", fontSize = 11.sp) },
+                            placeholder = { Text("admin@sail.in") },
                             leadingIcon = { Icon(Icons.Default.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(18.dp)) },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             singleLine = true
                         )
 
@@ -438,41 +536,122 @@ fun LoginScreen(
                         OutlinedTextField(
                             value = adminPassword,
                             onValueChange = { adminPassword = it },
-                            label = { Text("Passcode") },
+                            label = { Text("Admin Password") },
                             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp)) },
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             singleLine = true
                         )
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
                         Button(
                             onClick = {
-                                if (adminEmail.isBlank()) {
-                                    errorMessage = "Please enter admin email address."
-                                    return@Button
+                                val success = AttendanceSystemRepository.loginAsAdmin(adminEmail, adminPassword)
+                                if (!success) {
+                                    errorMessage = "Invalid admin credentials. Use admin@sail.in and admin123."
                                 }
-                                AttendanceSystemRepository.loginAsAdmin()
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Text("Enter Admin Dashboard", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
 
-                    if (errorMessage != null) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = errorMessage ?: "",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                    AnimatedVisibility(visible = errorMessage != null) {
+                        Column {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = errorMessage ?: "",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Google Sign-In Account Selector Simulation Modal
+    if (showGoogleAccountModal) {
+        Dialog(onDismissRequest = { showGoogleAccountModal = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                var googleEmailInput by remember { mutableStateOf("") }
+                var googleNameInput by remember { mutableStateOf("") }
+
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF4285F4),
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("G", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("Google Sign-In", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                            Text("Choose account to continue to SAIL SIAMD", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = googleEmailInput,
+                        onValueChange = { googleEmailInput = it },
+                        label = { Text("Google Email") },
+                        placeholder = { Text("rahul.sail@gmail.com") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = googleNameInput,
+                        onValueChange = { googleNameInput = it },
+                        label = { Text("Display Name") },
+                        placeholder = { Text("Rahul Sharma") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Button(
+                        onClick = {
+                            if (googleEmailInput.isNotBlank()) {
+                                showGoogleAccountModal = false
+                                AttendanceSystemRepository.loginWithGoogle(
+                                    email = googleEmailInput,
+                                    displayName = googleNameInput
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Authenticate Google Account", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }

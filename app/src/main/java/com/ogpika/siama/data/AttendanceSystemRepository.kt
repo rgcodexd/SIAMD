@@ -2,12 +2,7 @@ package com.ogpika.siama.data
 
 import com.ogpika.siama.data.remote.SupabaseClient
 import com.ogpika.siama.data.remote.SupabaseConfig
-import com.ogpika.siama.model.AttendanceStatus
-import com.ogpika.siama.model.DailyAttendance
-import com.ogpika.siama.model.InternGroup
-import com.ogpika.siama.model.InternProfile
-import com.ogpika.siama.model.MonthlyAttendanceSummary
-import com.ogpika.siama.model.UserRole
+import com.ogpika.siama.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +31,12 @@ object AttendanceSystemRepository {
     private val _isDarkMode = MutableStateFlow(true)
     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
 
+    private val _needsOnboarding = MutableStateFlow(false)
+    val needsOnboarding: StateFlow<Boolean> = _needsOnboarding.asStateFlow()
+
+    private val _currentActiveQrPayload = MutableStateFlow<AttendanceQrPayload?>(null)
+    val currentActiveQrPayload: StateFlow<AttendanceQrPayload?> = _currentActiveQrPayload.asStateFlow()
+
     fun toggleTheme() {
         _isDarkMode.value = !_isDarkMode.value
     }
@@ -51,6 +52,10 @@ object AttendanceSystemRepository {
     // 4. Daily Attendance Records (Clean state, no dummy records)
     private val _attendanceMap = MutableStateFlow<Map<String, Map<LocalDate, DailyAttendance>>>(emptyMap())
     val attendanceMap: StateFlow<Map<String, Map<LocalDate, DailyAttendance>>> = _attendanceMap.asStateFlow()
+
+    // 5. Leave Applications
+    private val _leaveApplications = MutableStateFlow<List<LeaveApplication>>(emptyList())
+    val leaveApplications: StateFlow<List<LeaveApplication>> = _leaveApplications.asStateFlow()
 
     /**
      * Synchronize live data from Supabase if configured
@@ -80,13 +85,71 @@ object AttendanceSystemRepository {
         }
     }
 
-    // 5. Authentication Actions
-    fun loginAsAdmin(): Boolean {
+    // 6. Authentication Actions
+    fun loginAsAdmin(email: String = "admin@sail.in", password: String = "admin123"): Boolean {
+        val cleanEmail = email.trim()
+        val isValid = cleanEmail.equals("admin@sail.in", ignoreCase = true) && password == "admin123"
+        if (isValid) {
+            _isLoggedIn.value = true
+            _currentUserRole.value = UserRole.ADMIN
+            _currentInternId.value = null
+            _needsOnboarding.value = false
+            syncWithSupabase()
+            return true
+        }
+        return false
+    }
+
+    fun loginWithGoogle(email: String, displayName: String): Pair<Boolean, Boolean> {
+        val cleanEmail = email.trim()
+        if (cleanEmail.isBlank()) return Pair(false, false)
+
+        var profile = _interns.value.firstOrNull { it.email.equals(cleanEmail, ignoreCase = true) }
+        val isNew = profile == null
+
+        if (profile == null) {
+            val count = _interns.value.size + 1
+            val newId = "SAIL-INT-2025-${String.format("%03d", count)}"
+            profile = InternProfile(
+                id = newId,
+                email = cleanEmail,
+                fullName = displayName.ifBlank { cleanEmail.substringBefore("@").replace(".", " ").capitalize() },
+                phone = "",
+                college = "",
+                joiningDate = LocalDate.now(),
+                department = "",
+                internIdNumber = newId,
+                authProvider = "GOOGLE"
+            )
+            _interns.value = _interns.value + profile
+
+            if (SupabaseConfig.isConfigured()) {
+                repositoryScope.launch {
+                    SupabaseClient.insertInternProfile(profile)
+                }
+            }
+        }
+
         _isLoggedIn.value = true
-        _currentUserRole.value = UserRole.ADMIN
-        _currentInternId.value = null
-        syncWithSupabase()
-        return true
+        _currentUserRole.value = UserRole.INTERN
+        _currentInternId.value = profile.id
+
+        val complete = profile.isProfileComplete
+        _needsOnboarding.value = !complete
+
+        // Fetch attendance logs for this intern
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                val logs = SupabaseClient.fetchAttendanceLogs(profile.id)
+                if (logs.isNotEmpty()) {
+                    val current = _attendanceMap.value.toMutableMap()
+                    current[profile.id] = logs
+                    _attendanceMap.value = current
+                }
+            }
+        }
+
+        return Pair(true, complete)
     }
 
     fun loginAsIntern(email: String): Boolean {
@@ -96,6 +159,8 @@ object AttendanceSystemRepository {
             _isLoggedIn.value = true
             _currentUserRole.value = UserRole.INTERN
             _currentInternId.value = profile.id
+            _needsOnboarding.value = !profile.isProfileComplete
+
             if (SupabaseConfig.isConfigured()) {
                 repositoryScope.launch {
                     val logs = SupabaseClient.fetchAttendanceLogs(profile.id)
@@ -110,6 +175,51 @@ object AttendanceSystemRepository {
         } else {
             false
         }
+    }
+
+    fun completeOnboarding(
+        fullName: String,
+        department: String,
+        internIdNumber: String,
+        phone: String,
+        college: String,
+        emergencyContact: String,
+        address: String
+    ): Boolean {
+        val currentId = _currentInternId.value ?: return false
+
+        _interns.value = _interns.value.map {
+            if (it.id == currentId) {
+                it.copy(
+                    fullName = fullName.trim(),
+                    department = department.trim(),
+                    internIdNumber = internIdNumber.trim(),
+                    phone = phone.trim(),
+                    college = college.trim(),
+                    emergencyContact = emergencyContact.trim(),
+                    address = address.trim()
+                )
+            } else it
+        }
+
+        _needsOnboarding.value = false
+
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.updateMandatoryProfile(
+                    id = currentId,
+                    fullName = fullName.trim(),
+                    phone = phone.trim(),
+                    college = college.trim(),
+                    department = department.trim(),
+                    internIdNumber = internIdNumber.trim(),
+                    emergencyContact = emergencyContact.trim(),
+                    address = address.trim()
+                )
+            }
+        }
+
+        return true
     }
 
     fun registerNewIntern(
@@ -131,16 +241,18 @@ object AttendanceSystemRepository {
             college = college.trim(),
             joiningDate = joiningDate,
             department = department.trim(),
+            internIdNumber = newId,
             groupId = null,
-            groupName = null
+            groupName = null,
+            authProvider = "EMAIL"
         )
 
         _interns.value = _interns.value + newProfile
         _isLoggedIn.value = true
         _currentUserRole.value = UserRole.INTERN
         _currentInternId.value = newId
+        _needsOnboarding.value = false
 
-        // Sync with Supabase asynchronously if configured
         if (SupabaseConfig.isConfigured()) {
             repositoryScope.launch {
                 SupabaseClient.insertInternProfile(newProfile)
@@ -154,6 +266,74 @@ object AttendanceSystemRepository {
         _isLoggedIn.value = false
         _currentUserRole.value = null
         _currentInternId.value = null
+        _needsOnboarding.value = false
+    }
+
+    // 7. Dynamic QR Generator & Verification Workflow
+    fun generateDailyAttendanceQr(
+        audience: QrTargetAudience = QrTargetAudience.ALL,
+        targetValue: String = "ALL"
+    ): AttendanceQrPayload {
+        val token = UUID.randomUUID().toString().take(8).uppercase()
+        val expiryTimestamp = System.currentTimeMillis() + (12 * 60 * 60 * 1000L) // 12 hours from now
+        val payload = AttendanceQrPayload(
+            date = LocalDate.now(),
+            token = token,
+            audience = audience,
+            targetValue = targetValue,
+            expiryTimestamp = expiryTimestamp
+        )
+        _currentActiveQrPayload.value = payload
+        return payload
+    }
+
+    fun scanAndMarkAttendance(qrPayloadString: String): Pair<Boolean, String> {
+        val internId = _currentInternId.value ?: return Pair(false, "No active intern logged in.")
+        val intern = _interns.value.firstOrNull { it.id == internId }
+            ?: return Pair(false, "Intern profile not found.")
+
+        val payload = AttendanceQrPayload.parse(qrPayloadString)
+            ?: return Pair(false, "Invalid QR Code format. Please scan the Admin's Official Daily Attendance QR.")
+
+        // 1. Verify Date
+        val today = LocalDate.now()
+        if (payload.date != today) {
+            return Pair(false, "This QR code is for ${payload.date}. Attendance can only be marked on the same date.")
+        }
+
+        // 2. Verify Target Audience
+        when (payload.audience) {
+            QrTargetAudience.ALL -> {
+                // Eligible for all
+            }
+            QrTargetAudience.DEPARTMENT -> {
+                if (!intern.department.equals(payload.targetValue, ignoreCase = true)) {
+                    return Pair(false, "QR is restricted to ${payload.targetValue}. Your department is ${intern.department}.")
+                }
+            }
+            QrTargetAudience.GROUP -> {
+                if (!intern.groupId.equals(payload.targetValue, ignoreCase = true)) {
+                    return Pair(false, "QR is restricted to Group ${payload.targetValue}.")
+                }
+            }
+        }
+
+        // 3. Check if already marked
+        val existingToday = _attendanceMap.value[internId]?.get(today)
+        if (existingToday?.status == AttendanceStatus.PRESENT) {
+            return Pair(true, "You are already marked PRESENT today at ${existingToday.checkInTime ?: "09:00 AM"}.")
+        }
+
+        // 4. Mark Present
+        val timeNow = java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("hh:mm a"))
+        markAttendance(
+            internId = internId,
+            date = today,
+            status = AttendanceStatus.PRESENT,
+            remarks = "QR Verified • Check-in: $timeNow"
+        )
+
+        return Pair(true, "Attendance Confirmed! Marked PRESENT for ${intern.fullName} at $timeNow.")
     }
 
     // 6. Intern Actions (Self details edit only)
@@ -321,5 +501,111 @@ object AttendanceSystemRepository {
             list.add(record)
         }
         return list
+    }
+
+    // 10. Leave Applications Module
+    fun applyForLeave(startDate: LocalDate, endDate: LocalDate, reason: String): Pair<Boolean, String> {
+        val internId = _currentInternId.value ?: return Pair(false, "No active intern logged in.")
+        val intern = _interns.value.firstOrNull { it.id == internId } ?: return Pair(false, "Intern not found.")
+
+        if (endDate.isBefore(startDate)) {
+            return Pair(false, "End date cannot be before start date.")
+        }
+
+        var workingDays = 0.0
+        var cur = startDate
+        while (!cur.isAfter(endDate)) {
+            val isSunday = cur.dayOfWeek == DayOfWeek.SUNDAY
+            val isHoliday = SailHolidayRepository.isHoliday(cur) != null
+            if (!isSunday && !isHoliday) {
+                workingDays += 1.0
+            }
+            cur = cur.plusDays(1)
+        }
+
+        if (workingDays <= 0.0) {
+            return Pair(false, "Selected dates contain only Sundays or official holidays.")
+        }
+
+        val internRecords = _attendanceMap.value[internId] ?: emptyMap()
+        val usedDays = internRecords.values.count { it.status == AttendanceStatus.ON_LEAVE }.toDouble()
+        val remainingQuota = (LeavePolicy.SANCTIONED_LEAVES_ENTITLEMENT - usedDays).coerceAtLeast(0.0)
+
+        val newApp = LeaveApplication(
+            id = "LEAVE-${System.currentTimeMillis()}",
+            internId = internId,
+            internName = intern.fullName,
+            startDate = startDate,
+            endDate = endDate,
+            totalDays = workingDays,
+            reason = reason.trim(),
+            status = LeaveStatus.APPROVED
+        )
+
+        _leaveApplications.value = _leaveApplications.value + newApp
+
+        cur = startDate
+        while (!cur.isAfter(endDate)) {
+            val isSunday = cur.dayOfWeek == DayOfWeek.SUNDAY
+            val isHoliday = SailHolidayRepository.isHoliday(cur) != null
+            if (!isSunday && !isHoliday) {
+                markAttendance(internId, cur, AttendanceStatus.ON_LEAVE, "Leave: ${reason.take(20)}")
+            }
+            cur = cur.plusDays(1)
+        }
+
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.submitLeaveApplication(
+                    applicationId = newApp.id,
+                    internId = internId,
+                    startDate = startDate,
+                    endDate = endDate,
+                    totalDays = workingDays,
+                    reason = reason
+                )
+            }
+        }
+
+        val quotaMsg = if (workingDays <= remainingQuota) {
+            "Approved within 12-day quota (${remainingQuota - workingDays} days remaining)."
+        } else {
+            "Approved (Exceeds 12-day quota - Loss of Pay applicable)."
+        }
+
+        return Pair(true, "Leave granted! $quotaMsg")
+    }
+
+    // 11. Automated Absenteeism (Daily Cutoff Check)
+    fun autoMarkAbsenteeism(upToDate: LocalDate = LocalDate.now().minusDays(1)) {
+        val currentAll = _attendanceMap.value.toMutableMap()
+        for (intern in _interns.value) {
+            val internMap = (currentAll[intern.id] ?: emptyMap()).toMutableMap()
+            var cur = intern.joiningDate
+            while (!cur.isAfter(upToDate)) {
+                val isSunday = cur.dayOfWeek == DayOfWeek.SUNDAY
+                val isHoliday = SailHolidayRepository.isHoliday(cur) != null
+                if (!isSunday && !isHoliday && !internMap.containsKey(cur)) {
+                    val absentRecord = DailyAttendance(
+                        id = "${intern.id}-$cur",
+                        internId = intern.id,
+                        date = cur,
+                        status = AttendanceStatus.ABSENT,
+                        checkInTime = null,
+                        markedBy = "SYSTEM_SCHEDULER",
+                        remarks = "Auto-marked Absent (Daily Cutoff)"
+                    )
+                    internMap[cur] = absentRecord
+                    if (SupabaseConfig.isConfigured()) {
+                        repositoryScope.launch {
+                            SupabaseClient.upsertDailyAttendance(absentRecord)
+                        }
+                    }
+                }
+                cur = cur.plusDays(1)
+            }
+            currentAll[intern.id] = internMap
+        }
+        _attendanceMap.value = currentAll
     }
 }
