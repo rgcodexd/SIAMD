@@ -1,20 +1,27 @@
 package com.ogpika.siama.data
 
+import com.ogpika.siama.data.remote.SupabaseClient
+import com.ogpika.siama.data.remote.SupabaseConfig
 import com.ogpika.siama.model.AttendanceStatus
 import com.ogpika.siama.model.DailyAttendance
 import com.ogpika.siama.model.InternGroup
 import com.ogpika.siama.model.InternProfile
 import com.ogpika.siama.model.MonthlyAttendanceSummary
 import com.ogpika.siama.model.UserRole
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 
 object AttendanceSystemRepository {
+
+    private val repositoryScope = CoroutineScope(Dispatchers.IO)
 
     // 1. Session State
     private val _isLoggedIn = MutableStateFlow(false)
@@ -33,149 +40,44 @@ object AttendanceSystemRepository {
         _isDarkMode.value = !_isDarkMode.value
     }
 
-    // 2. Groups / Books (Categorized by Joining Date)
-    private val _groups = MutableStateFlow<List<InternGroup>>(
-        listOf(
-            InternGroup(
-                id = "GRP-2025-JAN",
-                name = "Batch 15-Jan-2025 (Blast Furnace)",
-                joiningDate = LocalDate.of(2025, 1, 15),
-                department = "Blast Furnace Operations",
-                description = "Winter 2025 Mechanical & Metallurgy Interns"
-            ),
-            InternGroup(
-                id = "GRP-2025-FEB",
-                name = "Batch 01-Feb-2025 (IT & Automation)",
-                joiningDate = LocalDate.of(2025, 2, 1),
-                department = "Plant Automation & IT",
-                description = "Systems & SCADA instrumentation trainees"
-            ),
-            InternGroup(
-                id = "GRP-2025-MAR",
-                name = "Batch 01-Mar-2025 (Steel Melting Shop)",
-                joiningDate = LocalDate.of(2025, 3, 1),
-                department = "Steel Melting Shop II",
-                description = "Refractory & continuous casting project group"
-            )
-        )
-    )
+    // 2. Groups / Books (Clean state, no dummy records)
+    private val _groups = MutableStateFlow<List<InternGroup>>(emptyList())
     val groups: StateFlow<List<InternGroup>> = _groups.asStateFlow()
 
-    // 3. Intern Profiles
-    private val _interns = MutableStateFlow<List<InternProfile>>(
-        listOf(
-            InternProfile(
-                id = "SAIL-INT-2025-001",
-                email = "rahul.sharma@sailintern.in",
-                fullName = "Rahul Sharma",
-                phone = "+91 98765 11001",
-                college = "National Institute of Technology (NIT) Jamshedpur",
-                joiningDate = LocalDate.of(2025, 1, 15),
-                department = "Blast Furnace Operations",
-                groupId = "GRP-2025-JAN",
-                groupName = "Batch 15-Jan-2025 (Blast Furnace)",
-                mentorName = "Shri R.K. Verma (DGM BF-1)",
-                address = "SAIL Trainee Hostel Block B-12, Bokaro Steel City",
-                emergencyContact = "+91 94311 02938"
-            ),
-            InternProfile(
-                id = "SAIL-INT-2025-002",
-                email = "priya.kumari@sailintern.in",
-                fullName = "Priya Kumari",
-                phone = "+91 98765 11002",
-                college = "BIT Mesra, Ranchi",
-                joiningDate = LocalDate.of(2025, 1, 15),
-                department = "Blast Furnace Operations",
-                groupId = "GRP-2025-JAN",
-                groupName = "Batch 15-Jan-2025 (Blast Furnace)",
-                mentorName = "Shri R.K. Verma (DGM BF-1)",
-                address = "SAIL Trainee Hostel Block G-04, Bokaro Steel City",
-                emergencyContact = "+91 94311 99281"
-            ),
-            InternProfile(
-                id = "SAIL-INT-2025-003",
-                email = "amit.patel@sailintern.in",
-                fullName = "Amit Patel",
-                phone = "+91 98765 11003",
-                college = "IIT (ISM) Dhanbad",
-                joiningDate = LocalDate.of(2025, 2, 1),
-                department = "Plant Automation & IT",
-                groupId = "GRP-2025-FEB",
-                groupName = "Batch 01-Feb-2025 (IT & Automation)",
-                mentorName = "Smt. S. Sengupta (Chief Manager IT)",
-                address = "Hostel 3, Sector 4, Bokaro",
-                emergencyContact = "+91 98350 44123"
-            ),
-            InternProfile(
-                id = "SAIL-INT-2025-004",
-                email = "sunita.soren@sailintern.in",
-                fullName = "Sunita Soren",
-                phone = "+91 98765 11004",
-                college = "Birsa Institute of Technology Sindri",
-                joiningDate = LocalDate.of(2025, 2, 1),
-                department = "Plant Automation & IT",
-                groupId = "GRP-2025-FEB",
-                groupName = "Batch 01-Feb-2025 (IT & Automation)",
-                mentorName = "Smt. S. Sengupta (Chief Manager IT)",
-                address = "Sector 9D, Qtr 2034, Bokaro Steel City",
-                emergencyContact = "+91 91234 56780"
-            )
-        )
-    )
+    // 3. Intern Profiles (Clean state, no dummy records)
+    private val _interns = MutableStateFlow<List<InternProfile>>(emptyList())
     val interns: StateFlow<List<InternProfile>> = _interns.asStateFlow()
 
-    // 4. Daily Attendance Records: Map of internId to Map<LocalDate, DailyAttendance>
-    private val _attendanceMap = MutableStateFlow<Map<String, Map<LocalDate, DailyAttendance>>>(
-        generateInitialAttendanceRecords()
-    )
+    // 4. Daily Attendance Records (Clean state, no dummy records)
+    private val _attendanceMap = MutableStateFlow<Map<String, Map<LocalDate, DailyAttendance>>>(emptyMap())
     val attendanceMap: StateFlow<Map<String, Map<LocalDate, DailyAttendance>>> = _attendanceMap.asStateFlow()
 
-    private fun generateInitialAttendanceRecords(): Map<String, Map<LocalDate, DailyAttendance>> {
-        val result = mutableMapOf<String, MutableMap<LocalDate, DailyAttendance>>()
-        val internIds = listOf("SAIL-INT-2025-001", "SAIL-INT-2025-002", "SAIL-INT-2025-003", "SAIL-INT-2025-004")
+    /**
+     * Synchronize live data from Supabase if configured
+     */
+    fun syncWithSupabase() {
+        if (!SupabaseConfig.isConfigured()) return
 
-        val startDate = LocalDate.of(2025, 1, 1)
-        val endDate = LocalDate.of(2025, 5, 31)
-
-        internIds.forEach { id ->
-            val internMap = mutableMapOf<LocalDate, DailyAttendance>()
-            var current = startDate
-            var dayCount = 0
-
-            while (!current.isAfter(endDate)) {
-                val isHoliday = SailHolidayRepository.isHoliday(current) != null
-                val isSunday = current.dayOfWeek == DayOfWeek.SUNDAY
-
-                val status = when {
-                    isHoliday -> AttendanceStatus.HOLIDAY
-                    isSunday -> AttendanceStatus.HOLIDAY
-                    // Seed realistic patterns: mostly Present, occasional Absent or Leave
-                    (dayCount % 14 == 5) -> AttendanceStatus.ABSENT
-                    (dayCount % 21 == 10) -> AttendanceStatus.ON_LEAVE
-                    else -> AttendanceStatus.PRESENT
-                }
-
-                internMap[current] = DailyAttendance(
-                    id = "$id-${current}",
-                    internId = id,
-                    date = current,
-                    status = status,
-                    checkInTime = if (status == AttendanceStatus.PRESENT) "09:0${(1..9).random()} AM" else null,
-                    markedBy = if (status == AttendanceStatus.PRESENT) "QR_SCAN" else "ADMIN",
-                    remarks = when (status) {
-                        AttendanceStatus.HOLIDAY -> if (isHoliday) SailHolidayRepository.isHoliday(current)?.title else "Sunday Closed"
-                        AttendanceStatus.ABSENT -> "Unexcused absence"
-                        AttendanceStatus.ON_LEAVE -> "Sanctioned Leave approved by Mentor"
-                        AttendanceStatus.PRESENT -> "Biometric / QR Verified"
-                    }
-                )
-
-                current = current.plusDays(1)
-                dayCount++
+        repositoryScope.launch {
+            val remoteInterns = SupabaseClient.fetchInternProfiles()
+            if (remoteInterns.isNotEmpty()) {
+                _interns.value = remoteInterns
             }
-            result[id] = internMap
+
+            val remoteGroups = SupabaseClient.fetchInternGroups()
+            if (remoteGroups.isNotEmpty()) {
+                _groups.value = remoteGroups
+            }
+
+            val currentMap = _attendanceMap.value.toMutableMap()
+            for (intern in _interns.value) {
+                val logs = SupabaseClient.fetchAttendanceLogs(intern.id)
+                if (logs.isNotEmpty()) {
+                    currentMap[intern.id] = logs
+                }
+            }
+            _attendanceMap.value = currentMap
         }
-        return result
     }
 
     // 5. Authentication Actions
@@ -183,15 +85,27 @@ object AttendanceSystemRepository {
         _isLoggedIn.value = true
         _currentUserRole.value = UserRole.ADMIN
         _currentInternId.value = null
+        syncWithSupabase()
         return true
     }
 
     fun loginAsIntern(email: String): Boolean {
-        val profile = _interns.value.firstOrNull { it.email.equals(email.trim(), ignoreCase = true) }
+        val cleanEmail = email.trim()
+        val profile = _interns.value.firstOrNull { it.email.equals(cleanEmail, ignoreCase = true) }
         return if (profile != null) {
             _isLoggedIn.value = true
             _currentUserRole.value = UserRole.INTERN
             _currentInternId.value = profile.id
+            if (SupabaseConfig.isConfigured()) {
+                repositoryScope.launch {
+                    val logs = SupabaseClient.fetchAttendanceLogs(profile.id)
+                    if (logs.isNotEmpty()) {
+                        val current = _attendanceMap.value.toMutableMap()
+                        current[profile.id] = logs
+                        _attendanceMap.value = current
+                    }
+                }
+            }
             true
         } else {
             false
@@ -226,26 +140,12 @@ object AttendanceSystemRepository {
         _currentUserRole.value = UserRole.INTERN
         _currentInternId.value = newId
 
-        // Seed initial attendance map for this intern
-        val newMap = _attendanceMap.value.toMutableMap()
-        val internMap = mutableMapOf<LocalDate, DailyAttendance>()
-        var cur = LocalDate.of(2025, 1, 1)
-        while (!cur.isAfter(LocalDate.of(2025, 5, 31))) {
-            val isHoliday = SailHolidayRepository.isHoliday(cur) != null
-            val isSunday = cur.dayOfWeek == DayOfWeek.SUNDAY
-            internMap[cur] = DailyAttendance(
-                id = "$newId-$cur",
-                internId = newId,
-                date = cur,
-                status = if (isHoliday || isSunday) AttendanceStatus.HOLIDAY else AttendanceStatus.PRESENT,
-                checkInTime = "09:00 AM",
-                markedBy = "ADMIN",
-                remarks = "Registered Record"
-            )
-            cur = cur.plusDays(1)
+        // Sync with Supabase asynchronously if configured
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.insertInternProfile(newProfile)
+            }
         }
-        newMap[newId] = internMap
-        _attendanceMap.value = newMap
 
         return newProfile
     }
@@ -274,6 +174,12 @@ object AttendanceSystemRepository {
                 )
             } else it
         }
+
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.updateInternProfile(currentId, phone, college, address, emergencyContact)
+            }
+        }
     }
 
     // 7. Join Group via QR Code Scanning
@@ -295,16 +201,20 @@ object AttendanceSystemRepository {
         return Pair(true, "Successfully joined ${group.name}!")
     }
 
-    // 8. Admin Management Actions
     fun addGroup(name: String, joiningDate: LocalDate, department: String, description: String): InternGroup {
         val newGroup = InternGroup(
-            id = "GRP-${joiningDate.year}-${joiningDate.monthValue}-${_groups.value.size + 1}",
+            id = "GRP-${joiningDate.year}-${String.format("%02d", joiningDate.monthValue)}-${_groups.value.size + 1}",
             name = name.trim(),
             joiningDate = joiningDate,
             department = department.trim(),
             description = description.trim()
         )
         _groups.value = _groups.value + newGroup
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.insertInternGroup(newGroup)
+            }
+        }
         return newGroup
     }
 
@@ -313,6 +223,12 @@ object AttendanceSystemRepository {
         val newMap = _attendanceMap.value.toMutableMap()
         newMap.remove(internId)
         _attendanceMap.value = newMap
+
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.deleteInternProfile(internId)
+            }
+        }
     }
 
     fun markAttendance(
@@ -324,7 +240,7 @@ object AttendanceSystemRepository {
         val currentAll = _attendanceMap.value.toMutableMap()
         val internMap = (currentAll[internId] ?: emptyMap()).toMutableMap()
 
-        internMap[date] = DailyAttendance(
+        val record = DailyAttendance(
             id = "$internId-$date",
             internId = internId,
             date = date,
@@ -333,9 +249,15 @@ object AttendanceSystemRepository {
             markedBy = "ADMIN",
             remarks = remarks ?: "Updated by Admin"
         )
-
+        internMap[date] = record
         currentAll[internId] = internMap
         _attendanceMap.value = currentAll
+
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.upsertDailyAttendance(record)
+            }
+        }
     }
 
     // 9. Monthly Summary Generator

@@ -16,7 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.automirrored.filled.Logout
+import com.ogpika.siama.data.remote.SupabaseConfig
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +39,7 @@ fun SIAMATopAppBar(
     currentRole: UserRole?,
     isDarkMode: Boolean,
     onToggleTheme: () -> Unit,
+    onOpenSupabaseConfig: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -102,8 +105,20 @@ fun SIAMATopAppBar(
                 }
             }
 
-            // Actions: Light/Dark theme switch & Logout
+            // Actions: Supabase Config, Light/Dark theme switch & Logout
             Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = onOpenSupabaseConfig,
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Cloud,
+                        contentDescription = "Supabase DB Config",
+                        tint = if (SupabaseConfig.isConfigured()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+
                 IconButton(
                     onClick = onToggleTheme,
                     modifier = Modifier.size(34.dp)

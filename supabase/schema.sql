@@ -19,18 +19,34 @@ CREATE TYPE attendance_status AS ENUM ('PRESENT', 'ABSENT', 'ON_LEAVE', 'HOLIDAY
 
 -- 3. PROFILES / USERS
 CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT NOT NULL,
     role user_role NOT NULL DEFAULT 'INTERN',
     intern_id_number TEXT UNIQUE,           -- e.g., SAIL-INT-2025-001
     department TEXT NOT NULL DEFAULT 'Plant Engineering',
     mentor_name TEXT,
+    phone TEXT,
+    college TEXT,
+    emergency_contact TEXT,
+    address TEXT,
+    group_id TEXT,
+    group_name TEXT,
     stipend_monthly NUMERIC(10, 2) NOT NULL DEFAULT 15000.00,
     internship_start_date DATE NOT NULL,
     internship_end_date DATE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3b. INTERN GROUPS / BOOKS (Categorized by Joining Date)
+CREATE TABLE IF NOT EXISTS public.intern_groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    joining_date DATE NOT NULL,
+    department TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 4. OFFICIAL SAIL HOLIDAY CALENDAR
@@ -51,7 +67,7 @@ CREATE TABLE IF NOT EXISTS public.holiday_calendar (
 -- Enforces SAIL Entitlement: 12 Sanctioned Leaves admissible during internship period
 CREATE TABLE IF NOT EXISTS public.leave_balances (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    intern_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    intern_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     total_sanctioned_quota NUMERIC(4, 1) NOT NULL DEFAULT 12.0, -- SAIL standard: 12 (Twelve) days
     used_leaves NUMERIC(4, 1) NOT NULL DEFAULT 0.0,
     pending_leaves NUMERIC(4, 1) NOT NULL DEFAULT 0.0,
@@ -64,14 +80,14 @@ CREATE TABLE IF NOT EXISTS public.leave_balances (
 -- 6. LEAVE APPLICATIONS
 CREATE TABLE IF NOT EXISTS public.leave_applications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    intern_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    intern_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     total_days NUMERIC(4, 1) NOT NULL,
     reason TEXT NOT NULL,
     status leave_status NOT NULL DEFAULT 'PENDING',
     applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    reviewed_by UUID REFERENCES public.profiles(id),
+    reviewed_by TEXT REFERENCES public.profiles(id),
     reviewed_at TIMESTAMP WITH TIME ZONE,
     admin_remarks TEXT,
     CONSTRAINT check_date_range CHECK (end_date >= start_date),
@@ -81,7 +97,7 @@ CREATE TABLE IF NOT EXISTS public.leave_applications (
 -- 7. ATTENDANCE & QR SCANNING LOGS
 CREATE TABLE IF NOT EXISTS public.attendance_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    intern_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    intern_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     attendance_date DATE NOT NULL,
     status attendance_status NOT NULL DEFAULT 'PRESENT',
     scan_time TIMESTAMP WITH TIME ZONE,
@@ -94,7 +110,7 @@ CREATE TABLE IF NOT EXISTS public.attendance_logs (
 -- 8. MONTHLY STIPEND COMPUTATION RECORD
 CREATE TABLE IF NOT EXISTS public.stipend_computations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    intern_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    intern_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     month_year DATE NOT NULL, -- First day of calculation month (e.g., '2025-05-01')
     working_days INT NOT NULL DEFAULT 22,
     days_present INT NOT NULL DEFAULT 0,
@@ -220,46 +236,90 @@ ALTER TABLE public.leave_balances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leave_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stipend_computations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.intern_groups ENABLE ROW LEVEL SECURITY;
 
--- Everyone authenticated can view holidays
-CREATE POLICY "Allow authenticated read for holidays"
-    ON public.holiday_calendar FOR SELECT
-    TO authenticated
+-- Groups: Everyone can read and manage
+CREATE POLICY "Allow read groups"
+    ON public.intern_groups FOR SELECT
+    TO anon, authenticated
     USING (true);
 
--- Interns can read their own profile, Admins read all
-CREATE POLICY "Allow users to view own profile or admin view all"
+CREATE POLICY "Allow manage groups"
+    ON public.intern_groups FOR ALL
+    TO anon, authenticated
+    USING (true);
+
+-- Everyone authenticated can view holidays
+CREATE POLICY "Allow read holidays"
+    ON public.holiday_calendar FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+-- Grant Permissions
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
+-- Profiles: Allow read, insert, update, delete
+CREATE POLICY "Allow read profiles"
     ON public.profiles FOR SELECT
-    TO authenticated
-    USING (
-        auth.uid() = id OR 
-        EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('ADMIN', 'SUPERVISOR'))
-    );
+    TO anon, authenticated
+    USING (true);
 
--- Leave Balances: Intern views own, Admin views all
-CREATE POLICY "Intern view own balance, Admin view all"
+CREATE POLICY "Allow insert profiles"
+    ON public.profiles FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "Allow update profiles"
+    ON public.profiles FOR UPDATE
+    TO anon, authenticated
+    USING (true);
+
+CREATE POLICY "Allow delete profiles"
+    ON public.profiles FOR DELETE
+    TO anon, authenticated
+    USING (true);
+
+-- Attendance Logs: Allow read, insert, update
+CREATE POLICY "Allow read attendance"
+    ON public.attendance_logs FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+CREATE POLICY "Allow insert attendance"
+    ON public.attendance_logs FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "Allow update attendance"
+    ON public.attendance_logs FOR UPDATE
+    TO anon, authenticated
+    USING (true);
+
+-- Leave Balances: Allow read and manage
+CREATE POLICY "Allow read leave balances"
     ON public.leave_balances FOR SELECT
-    TO authenticated
-    USING (
-        intern_id = auth.uid() OR 
-        EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('ADMIN', 'SUPERVISOR'))
-    );
+    TO anon, authenticated
+    USING (true);
 
--- Leave Applications: Intern view/insert own, Admin full access
-CREATE POLICY "Intern view own leave applications"
+CREATE POLICY "Allow manage leave balances"
+    ON public.leave_balances FOR ALL
+    TO anon, authenticated
+    USING (true);
+
+-- Leave Applications: Allow read, insert, update
+CREATE POLICY "Allow read leave applications"
     ON public.leave_applications FOR SELECT
-    TO authenticated
-    USING (
-        intern_id = auth.uid() OR 
-        EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('ADMIN', 'SUPERVISOR'))
-    );
+    TO anon, authenticated
+    USING (true);
 
-CREATE POLICY "Intern insert own leave application"
+CREATE POLICY "Allow insert leave applications"
     ON public.leave_applications FOR INSERT
-    TO authenticated
-    WITH CHECK (intern_id = auth.uid());
+    TO anon, authenticated
+    WITH CHECK (true);
 
-CREATE POLICY "Admin update leave status"
+CREATE POLICY "Allow update leave applications"
     ON public.leave_applications FOR UPDATE
-    TO authenticated
-    USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('ADMIN', 'SUPERVISOR')));
+    TO anon, authenticated
+    USING (true);

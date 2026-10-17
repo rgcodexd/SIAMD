@@ -209,7 +209,7 @@ private fun InternProfileCard() {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = LeaveManagementRepository.CURRENT_INTERN_NAME,
+                        text = LeaveManagementRepository.CURRENT_INTERN_NAME.ifBlank { "Registered Intern" },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -232,7 +232,9 @@ private fun InternProfileCard() {
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
-                    text = "${LeaveManagementRepository.CURRENT_INTERN_ROLL} • ${LeaveManagementRepository.CURRENT_INTERN_DEPT}",
+                    text = if (LeaveManagementRepository.CURRENT_INTERN_ROLL.isNotBlank())
+                        "${LeaveManagementRepository.CURRENT_INTERN_ROLL} • ${LeaveManagementRepository.CURRENT_INTERN_DEPT}"
+                    else "SAIL Internship Program",
                     fontSize = 11.sp,
                     color = Color(0xFF94A3B8)
                 )

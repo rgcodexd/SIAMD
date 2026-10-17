@@ -79,7 +79,35 @@ fun InternAttendanceScreen(
     val attendanceMap by AttendanceSystemRepository.attendanceMap.collectAsState()
     val groups by AttendanceSystemRepository.groups.collectAsState()
 
-    val profile = interns.firstOrNull { it.id == currentInternId } ?: interns.first()
+    val profile = interns.firstOrNull { it.id == currentInternId } ?: interns.firstOrNull()
+
+    if (profile == null) {
+        Box(
+            modifier = modifier.fillMaxSize().padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "No intern profile found.",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Please register your Intern ID from the login screen.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { AttendanceSystemRepository.logout() }) {
+                    Text("Go to Login Screen")
+                }
+            }
+        }
+        return
+    }
+
     val internAttendance = attendanceMap[profile.id] ?: emptyMap()
 
     var selectedMonth by remember { mutableStateOf(YearMonth.of(2025, 1)) }

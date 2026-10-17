@@ -15,74 +15,22 @@ import java.util.UUID
 
 object LeaveManagementRepository {
 
-    const val CURRENT_INTERN_ID = "intern-001"
-    const val CURRENT_INTERN_NAME = "Rahul Sharma"
-    const val CURRENT_INTERN_ROLL = "SAIL/BSL/INT/2025/089"
-    const val CURRENT_INTERN_DEPT = "Blast Furnace Automation & IT"
+    const val CURRENT_INTERN_ID = ""
+    const val CURRENT_INTERN_NAME = ""
+    const val CURRENT_INTERN_ROLL = ""
+    const val CURRENT_INTERN_DEPT = ""
 
     private val _leaveBalance = MutableStateFlow(
         LeaveBalance(
-            internId = CURRENT_INTERN_ID,
+            internId = "",
             totalSanctionedQuota = LeavePolicy.SANCTIONED_LEAVES_ENTITLEMENT, // 12 days
-            usedLeaves = 4.0,
-            pendingLeaves = 2.0
+            usedLeaves = 0.0,
+            pendingLeaves = 0.0
         )
     )
     val leaveBalance: StateFlow<LeaveBalance> = _leaveBalance.asStateFlow()
 
-    private val _applications = MutableStateFlow<List<LeaveApplication>>(
-        listOf(
-            LeaveApplication(
-                id = "app-01",
-                internId = CURRENT_INTERN_ID,
-                internName = CURRENT_INTERN_NAME,
-                startDate = LocalDate.of(2025, 2, 10),
-                endDate = LocalDate.of(2025, 2, 11),
-                totalDays = 2.0,
-                reason = "Mid-term engineering semester exam",
-                status = LeaveStatus.APPROVED,
-                appliedDate = LocalDate.of(2025, 2, 1),
-                adminRemarks = "Approved by Mentor (DGM Plant Automation)"
-            ),
-            LeaveApplication(
-                id = "app-02",
-                internId = CURRENT_INTERN_ID,
-                internName = CURRENT_INTERN_NAME,
-                startDate = LocalDate.of(2025, 4, 15),
-                endDate = LocalDate.of(2025, 4, 16),
-                totalDays = 2.0,
-                reason = "Family medical contingency",
-                status = LeaveStatus.APPROVED,
-                appliedDate = LocalDate.of(2025, 4, 8),
-                adminRemarks = "Approved on medical grounds"
-            ),
-            LeaveApplication(
-                id = "app-03",
-                internId = CURRENT_INTERN_ID,
-                internName = CURRENT_INTERN_NAME,
-                startDate = LocalDate.of(2025, 5, 12),
-                endDate = LocalDate.of(2025, 5, 13),
-                totalDays = 2.0,
-                reason = "University project submission and viva-voce",
-                status = LeaveStatus.PENDING,
-                appliedDate = LocalDate.of(2025, 5, 5),
-                adminRemarks = null
-            ),
-            // Another intern's pending application for Admin view demo
-            LeaveApplication(
-                id = "app-04",
-                internId = "intern-002",
-                internName = "Priya Kumari (SAIL/BSL/INT/094)",
-                startDate = LocalDate.of(2025, 5, 19),
-                endDate = LocalDate.of(2025, 5, 20),
-                totalDays = 2.0,
-                reason = "Higher studies counseling interview",
-                status = LeaveStatus.PENDING,
-                appliedDate = LocalDate.of(2025, 5, 10),
-                adminRemarks = null
-            )
-        )
-    )
+    private val _applications = MutableStateFlow<List<LeaveApplication>>(emptyList())
     val applications: StateFlow<List<LeaveApplication>> = _applications.asStateFlow()
 
     /**

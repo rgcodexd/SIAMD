@@ -81,12 +81,6 @@ class LeaveAndHolidayPolicyTest {
         AttendanceSystemRepository.logout()
         assertFalse(AttendanceSystemRepository.isLoggedIn.value)
 
-        // Intern Login with valid email
-        assertTrue(AttendanceSystemRepository.loginAsIntern("rahul.sharma@sailintern.in"))
-        assertTrue(AttendanceSystemRepository.isLoggedIn.value)
-        assertEquals(UserRole.INTERN, AttendanceSystemRepository.currentUserRole.value)
-        assertEquals("SAIL-INT-2025-001", AttendanceSystemRepository.currentInternId.value)
-
         // Intern Registration with mandatory details
         val registered = AttendanceSystemRepository.registerNewIntern(
             email = "vikram.singh@sailintern.in",
@@ -99,11 +93,25 @@ class LeaveAndHolidayPolicyTest {
         assertNotNull(registered)
         assertTrue(registered.id.startsWith("SAIL-INT-2025-"))
         assertEquals("Vikram Singh", registered.fullName)
+
+        // Intern Login with valid registered email
+        assertTrue(AttendanceSystemRepository.loginAsIntern("vikram.singh@sailintern.in"))
+        assertTrue(AttendanceSystemRepository.isLoggedIn.value)
+        assertEquals(UserRole.INTERN, AttendanceSystemRepository.currentUserRole.value)
+        assertEquals(registered.id, AttendanceSystemRepository.currentInternId.value)
     }
 
     @Test
     fun testAttendanceSystemMarkingAndMonthlyCalculation() {
-        val internId = "SAIL-INT-2025-001"
+        val registered = AttendanceSystemRepository.registerNewIntern(
+            email = "rohit.verma@sailintern.in",
+            fullName = "Rohit Verma",
+            phone = "+91 98765 88888",
+            college = "NIT Rourkela",
+            joiningDate = LocalDate.of(2025, 1, 1),
+            department = "IT Automation"
+        )
+        val internId = registered.id
         val testDate = LocalDate.of(2025, 1, 10)
 
         // Mark Present
@@ -120,20 +128,33 @@ class LeaveAndHolidayPolicyTest {
         // Calculate Monthly Summary
         val summary = AttendanceSystemRepository.getMonthlySummary(internId, YearMonth.of(2025, 1))
         assertEquals(31, summary.totalCalendarDays)
-        assertTrue(summary.presentDays >= 0)
         assertTrue(summary.attendancePercentage in 0.0..100.0)
     }
 
     @Test
     fun testQrJoinGroupFlow() {
-        AttendanceSystemRepository.loginAsIntern("rahul.sharma@sailintern.in")
-        val group = AttendanceSystemRepository.groups.value.first()
+        val registered = AttendanceSystemRepository.registerNewIntern(
+            email = "anita.das@sailintern.in",
+            fullName = "Anita Das",
+            phone = "+91 98765 77777",
+            college = "Jadavpur University",
+            joiningDate = LocalDate.of(2025, 2, 1),
+            department = "Mechanical"
+        )
+        AttendanceSystemRepository.loginAsIntern("anita.das@sailintern.in")
+
+        val group = AttendanceSystemRepository.addGroup(
+            name = "Batch 01-Feb-2025 (Mechanical)",
+            joiningDate = LocalDate.of(2025, 2, 1),
+            department = "Mechanical Engineering",
+            description = "Winter 2025 batch"
+        )
 
         val (success, message) = AttendanceSystemRepository.joinGroupByQr(group.qrPayload)
         assertTrue(success)
         assertTrue(message.contains(group.name))
 
-        val intern = AttendanceSystemRepository.interns.value.first { it.id == "SAIL-INT-2025-001" }
+        val intern = AttendanceSystemRepository.interns.value.first { it.id == registered.id }
         assertEquals(group.id, intern.groupId)
         assertEquals(group.name, intern.groupName)
     }

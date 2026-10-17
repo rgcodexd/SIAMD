@@ -508,7 +508,7 @@ fun AdminPortalScreen(
         var newEmail by remember { mutableStateOf("") }
         var newPhone by remember { mutableStateOf("") }
         var newCollege by remember { mutableStateOf("") }
-        var newDept by remember { mutableStateOf("Plant Automation & IT") }
+        var newDept by remember { mutableStateOf("") }
 
         Dialog(onDismissRequest = { showAddInternDialog = false }) {
             Card(
@@ -567,8 +567,8 @@ fun AdminPortalScreen(
     // Modal: Add Group
     if (showAddGroupDialog) {
         var groupName by remember { mutableStateOf("") }
-        var groupDept by remember { mutableStateOf("Blast Furnace Operations") }
-        var groupDesc by remember { mutableStateOf("New batch interns") }
+        var groupDept by remember { mutableStateOf("") }
+        var groupDesc by remember { mutableStateOf("") }
 
         Dialog(onDismissRequest = { showAddGroupDialog = false }) {
             Card(
@@ -703,7 +703,45 @@ private fun AdminInternsListSection(
             }
         }
 
-        items(filteredInterns.size) { idx ->
+        if (filteredInterns.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = if (interns.isEmpty()) "No interns enrolled yet." else "No interns in this group.",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Tap the + button below to add an intern or have them register.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            items(filteredInterns.size) { idx ->
             val intern = filteredInterns[idx]
             val currentMonth = YearMonth.of(2025, 1)
             val summary = remember(intern.id, attendanceMap) {
@@ -859,6 +897,7 @@ private fun AdminInternsListSection(
                 }
             }
         }
+        }
 
         item {
             Spacer(modifier = Modifier.height(72.dp))
@@ -901,7 +940,45 @@ private fun AdminGroupsSection(
             }
         }
 
-        items(groups.size) { idx ->
+        if (groups.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Groups,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "No groups created yet.",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Tap the + button below to create your first group and generate a WhatsApp join QR code.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            items(groups.size) { idx ->
             val group = groups[idx]
             val members = interns.filter { it.groupId == group.id }
 
@@ -988,6 +1065,7 @@ private fun AdminGroupsSection(
                 }
             }
         }
+        }
 
         item {
             Spacer(modifier = Modifier.height(72.dp))
@@ -1054,7 +1132,29 @@ private fun AdminQuickDailyMarkSection(
             }
         }
 
-        items(interns.size) { idx ->
+        if (interns.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No interns enrolled yet to mark attendance.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            items(interns.size) { idx ->
             val intern = interns[idx]
             val record = (attendanceMap[intern.id] ?: emptyMap())[targetDate]
             val status = record?.status ?: AttendanceStatus.ABSENT
@@ -1128,6 +1228,7 @@ private fun AdminQuickDailyMarkSection(
                     }
                 }
             }
+        }
         }
 
         item {

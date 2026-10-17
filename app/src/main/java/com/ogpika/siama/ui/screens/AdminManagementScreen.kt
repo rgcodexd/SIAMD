@@ -406,14 +406,17 @@ private fun InternLeaveRosterSection(currentUsed: Double) {
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                InternRosterRow("Rahul Sharma (BSL-089)", "${currentUsed.toInt()} / 12 used", if (currentUsed > 12) "Loss of Pay" else "In Quota", currentUsed > 12)
-                Spacer(modifier = Modifier.height(8.dp))
-                InternRosterRow("Priya Kumari (BSL-094)", "2 / 12 used", "In Quota", false)
-                Spacer(modifier = Modifier.height(8.dp))
-                InternRosterRow("Amit Patel (BSL-102)", "11 / 12 used", "1 Day Left", false)
-                Spacer(modifier = Modifier.height(8.dp))
-                InternRosterRow("Sunita Soren (BSL-108)", "13 / 12 used", "1 Day LOP", true)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "No intern records found. Interns will appear here once registered or synced from Supabase.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF94A3B8)
+                )
             }
         }
     }
