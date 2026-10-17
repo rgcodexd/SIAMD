@@ -9,64 +9,77 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import com.ogpika.siama.ui.components.AppRole
-import com.ogpika.siama.ui.components.SailTopBar
-import com.ogpika.siama.ui.screens.AdminManagementScreen
-import com.ogpika.siama.ui.screens.InternDashboardScreen
-import com.ogpika.siama.ui.theme.SAILInternAttendanceManagementApplicationTheme
+import com.ogpika.siama.data.AttendanceSystemRepository
+import com.ogpika.siama.model.UserRole
+import com.ogpika.siama.ui.components.SIAMATopAppBar
+import com.ogpika.siama.ui.screens.AdminPortalScreen
+import com.ogpika.siama.ui.screens.InternAttendanceScreen
+import com.ogpika.siama.ui.screens.LoginScreen
+import com.ogpika.siama.ui.theme.SIAMATheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            SAILInternAttendanceManagementApplicationTheme {
-                MainAppContainer()
+            val isDarkMode by AttendanceSystemRepository.isDarkMode.collectAsState()
+
+            SIAMATheme(darkTheme = isDarkMode) {
+                MainAppNavigationRoot()
             }
         }
     }
 }
 
 @Composable
-fun MainAppContainer() {
-    var currentRole by remember { mutableStateOf(AppRole.INTERN) }
+fun MainAppNavigationRoot() {
+    val isLoggedIn by AttendanceSystemRepository.isLoggedIn.collectAsState()
+    val currentUserRole by AttendanceSystemRepository.currentUserRole.collectAsState()
+    val isDarkMode by AttendanceSystemRepository.isDarkMode.collectAsState()
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = Color(0xFF0F172A),
-        topBar = {
-            SailTopBar(
-                currentRole = currentRole,
-                onRoleToggle = { newRole ->
-                    currentRole = newRole
-                }
+    Crossfade(targetState = isLoggedIn, label = "authCrossfade") { loggedIn ->
+        if (!loggedIn) {
+            LoginScreen(
+                isDarkMode = isDarkMode,
+                onToggleTheme = { AttendanceSystemRepository.toggleTheme() }
             )
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(Color(0xFF0F172A))
-        ) {
-            Crossfade(
-                targetState = currentRole,
-                label = "roleCrossfade"
-            ) { role ->
-                when (role) {
-                    AppRole.INTERN -> {
-                        InternDashboardScreen()
-                    }
-                    AppRole.ADMIN -> {
-                        AdminManagementScreen()
+        } else {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
+                    SIAMATopAppBar(
+                        currentRole = currentUserRole,
+                        isDarkMode = isDarkMode,
+                        onToggleTheme = { AttendanceSystemRepository.toggleTheme() },
+                        onLogout = { AttendanceSystemRepository.logout() }
+                    )
+                }
+            ) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    when (currentUserRole) {
+                        UserRole.ADMIN -> {
+                            AdminPortalScreen()
+                        }
+                        UserRole.INTERN -> {
+                            InternAttendanceScreen()
+                        }
+                        null -> {
+                            LoginScreen(
+                                isDarkMode = isDarkMode,
+                                onToggleTheme = { AttendanceSystemRepository.toggleTheme() }
+                            )
+                        }
                     }
                 }
             }

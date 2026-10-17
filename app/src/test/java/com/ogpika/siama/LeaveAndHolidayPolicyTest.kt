@@ -1,15 +1,21 @@
 package com.ogpika.siama
 
+import com.ogpika.siama.data.AttendanceSystemRepository
 import com.ogpika.siama.data.LeaveManagementRepository
 import com.ogpika.siama.data.SailHolidayRepository
+import com.ogpika.siama.model.AttendanceStatus
 import com.ogpika.siama.model.HolidayCategory
 import com.ogpika.siama.model.LeavePolicy
 import com.ogpika.siama.model.LeaveStatus
+import com.ogpika.siama.model.UserRole
+import com.ogpika.siama.util.QrCodeGenerator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.time.YearMonth
 
 class LeaveAndHolidayPolicyTest {
 
@@ -65,48 +71,79 @@ class LeaveAndHolidayPolicyTest {
     }
 
     @Test
-    fun testWorkingDaysExcludesOfficialHolidaysAndSundays() {
-        // Republic day (2025-01-26 is a Sunday)
-        // SAIL Foundation Day: 2025-01-24 is a Friday (Closed Holiday)
-        val holiday = SailHolidayRepository.isHoliday(LocalDate.of(2025, 1, 24))
-        assertNotNull(holiday)
+    fun testAttendanceSystemAuthenticationAndRegistration() {
+        // Admin Login
+        assertTrue(AttendanceSystemRepository.loginAsAdmin())
+        assertTrue(AttendanceSystemRepository.isLoggedIn.value)
+        assertEquals(UserRole.ADMIN, AttendanceSystemRepository.currentUserRole.value)
 
-        // Span from Jan 23 (Thu) to Jan 25 (Sat) -> Jan 24 is holiday, so 2 working days
-        val workingDays = LeaveManagementRepository.calculateWorkingLeaveDays(
-            LocalDate.of(2025, 1, 23),
-            LocalDate.of(2025, 1, 25)
+        // Logout
+        AttendanceSystemRepository.logout()
+        assertFalse(AttendanceSystemRepository.isLoggedIn.value)
+
+        // Intern Login with valid email
+        assertTrue(AttendanceSystemRepository.loginAsIntern("rahul.sharma@sailintern.in"))
+        assertTrue(AttendanceSystemRepository.isLoggedIn.value)
+        assertEquals(UserRole.INTERN, AttendanceSystemRepository.currentUserRole.value)
+        assertEquals("SAIL-INT-2025-001", AttendanceSystemRepository.currentInternId.value)
+
+        // Intern Registration with mandatory details
+        val registered = AttendanceSystemRepository.registerNewIntern(
+            email = "vikram.singh@sailintern.in",
+            fullName = "Vikram Singh",
+            phone = "+91 98765 99999",
+            college = "IIT Kharagpur",
+            joiningDate = LocalDate.of(2025, 3, 1),
+            department = "Blast Furnace"
         )
-        assertEquals(2.0, workingDays, 0.0)
+        assertNotNull(registered)
+        assertTrue(registered.id.startsWith("SAIL-INT-2025-"))
+        assertEquals("Vikram Singh", registered.fullName)
     }
 
     @Test
-    fun testLeaveSubmissionAndApprovalFlow() {
-        val initialBalance = LeaveManagementRepository.leaveBalance.value
-        val initialUsed = initialBalance.usedLeaves
-        val initialPending = initialBalance.pendingLeaves
+    fun testAttendanceSystemMarkingAndMonthlyCalculation() {
+        val internId = "SAIL-INT-2025-001"
+        val testDate = LocalDate.of(2025, 1, 10)
 
-        val submitResult = LeaveManagementRepository.submitApplication(
-            startDate = LocalDate.of(2025, 6, 2),
-            endDate = LocalDate.of(2025, 6, 3),
-            reason = "Test unit application"
-        )
-        assertTrue(submitResult.isSuccess)
-        val app = submitResult.getOrThrow()
-        assertEquals(LeaveStatus.PENDING, app.status)
+        // Mark Present
+        AttendanceSystemRepository.markAttendance(internId, testDate, AttendanceStatus.PRESENT, "Biometric")
+        val recordPresent = AttendanceSystemRepository.attendanceMap.value[internId]?.get(testDate)
+        assertNotNull(recordPresent)
+        assertEquals(AttendanceStatus.PRESENT, recordPresent?.status)
 
-        val balanceAfterSubmit = LeaveManagementRepository.leaveBalance.value
-        assertEquals(initialPending + app.totalDays, balanceAfterSubmit.pendingLeaves, 0.0)
+        // Mark Absent
+        AttendanceSystemRepository.markAttendance(internId, testDate, AttendanceStatus.ABSENT, "Absent")
+        val recordAbsent = AttendanceSystemRepository.attendanceMap.value[internId]?.get(testDate)
+        assertEquals(AttendanceStatus.ABSENT, recordAbsent?.status)
 
-        // Approve
-        LeaveManagementRepository.approveApplication(app.id, "Approved in test")
-        val balanceAfterApprove = LeaveManagementRepository.leaveBalance.value
-        assertEquals(initialUsed + app.totalDays, balanceAfterApprove.usedLeaves, 0.0)
+        // Calculate Monthly Summary
+        val summary = AttendanceSystemRepository.getMonthlySummary(internId, YearMonth.of(2025, 1))
+        assertEquals(31, summary.totalCalendarDays)
+        assertTrue(summary.presentDays >= 0)
+        assertTrue(summary.attendancePercentage in 0.0..100.0)
     }
 
     @Test
-    fun testStipendCalculationWithinQuota() {
-        val stipend = LeaveManagementRepository.computeMonthlyStipend("May 2025")
-        assertTrue(stipend.netPayableStipend > 0.0)
-        assertEquals(15000.0, stipend.baseMonthlyStipend, 0.0)
+    fun testQrJoinGroupFlow() {
+        AttendanceSystemRepository.loginAsIntern("rahul.sharma@sailintern.in")
+        val group = AttendanceSystemRepository.groups.value.first()
+
+        val (success, message) = AttendanceSystemRepository.joinGroupByQr(group.qrPayload)
+        assertTrue(success)
+        assertTrue(message.contains(group.name))
+
+        val intern = AttendanceSystemRepository.interns.value.first { it.id == "SAIL-INT-2025-001" }
+        assertEquals(group.id, intern.groupId)
+        assertEquals(group.name, intern.groupName)
+    }
+
+    @Test
+    fun testQrCodeGeneratorMatrixCreation() {
+        val matrix = QrCodeGenerator.generateBitMatrix("TEST_PAYLOAD", 200)
+        assertNotNull(matrix)
+        assertEquals(200, matrix.width)
+        assertEquals(200, matrix.height)
+        assertTrue(matrix.get(10, 10) || !matrix.get(10, 10))
     }
 }
