@@ -24,6 +24,17 @@ CREATE TABLE IF NOT EXISTS public.intern_groups (
 
 ALTER TABLE public.intern_groups ENABLE ROW LEVEL SECURITY;
 
+-- 2b. Ensure departments table exists (Admin-managed departments)
+CREATE TABLE IF NOT EXISTS public.departments (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    code TEXT,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
+
 -- 3. Ensure profiles table has required columns
 DO $$ 
 BEGIN
@@ -35,6 +46,18 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'auth_provider') THEN
         ALTER TABLE public.profiles ADD COLUMN auth_provider TEXT DEFAULT 'EMAIL';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'college') THEN
+        ALTER TABLE public.profiles ADD COLUMN college TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'phone') THEN
+        ALTER TABLE public.profiles ADD COLUMN phone TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'emergency_contact') THEN
+        ALTER TABLE public.profiles ADD COLUMN emergency_contact TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'address') THEN
+        ALTER TABLE public.profiles ADD COLUMN address TEXT;
     END IF;
 END $$;
 
@@ -50,6 +73,11 @@ DROP POLICY IF EXISTS "Admin update leave status" ON public.leave_applications;
 
 DROP POLICY IF EXISTS "Allow read groups" ON public.intern_groups;
 DROP POLICY IF EXISTS "Allow manage groups" ON public.intern_groups;
+DROP POLICY IF EXISTS "Allow read departments" ON public.departments;
+DROP POLICY IF EXISTS "Allow insert departments" ON public.departments;
+DROP POLICY IF EXISTS "Allow update departments" ON public.departments;
+DROP POLICY IF EXISTS "Allow delete departments" ON public.departments;
+DROP POLICY IF EXISTS "Allow manage departments" ON public.departments;
 DROP POLICY IF EXISTS "Allow read holidays" ON public.holiday_calendar;
 DROP POLICY IF EXISTS "Allow read profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Allow insert profiles" ON public.profiles;
@@ -111,6 +139,11 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated;
 -- 9. Add permissive Row Level Security (RLS) policies for mobile client
 CREATE POLICY "Allow read groups" ON public.intern_groups FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Allow manage groups" ON public.intern_groups FOR ALL TO anon, authenticated USING (true);
+
+CREATE POLICY "Allow read departments" ON public.departments FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Allow insert departments" ON public.departments FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Allow update departments" ON public.departments FOR UPDATE TO anon, authenticated USING (true);
+CREATE POLICY "Allow delete departments" ON public.departments FOR DELETE TO anon, authenticated USING (true);
 
 CREATE POLICY "Allow read holidays" ON public.holiday_calendar FOR SELECT TO anon, authenticated USING (true);
 

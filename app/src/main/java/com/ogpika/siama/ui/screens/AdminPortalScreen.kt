@@ -90,7 +90,9 @@ import com.ogpika.siama.model.DailyAttendance
 import com.ogpika.siama.model.InternGroup
 import com.ogpika.siama.model.InternProfile
 import com.ogpika.siama.model.QrTargetAudience
-import com.ogpika.siama.model.SAIL_DEPARTMENTS
+import androidx.compose.material.icons.filled.Business
+import androidx.compose.material3.AlertDialog
+import com.ogpika.siama.model.Department
 import com.ogpika.siama.ui.components.AttendanceCalendarView
 import com.ogpika.siama.ui.theme.StatusAbsent
 import com.ogpika.siama.ui.theme.StatusHoliday
@@ -110,6 +112,10 @@ fun AdminPortalScreen(
     val interns by AttendanceSystemRepository.interns.collectAsState()
     val groups by AttendanceSystemRepository.groups.collectAsState()
     val attendanceMap by AttendanceSystemRepository.attendanceMap.collectAsState()
+    val departments by AttendanceSystemRepository.departments.collectAsState()
+
+    var showAddDeptDialog by remember { mutableStateOf(false) }
+    var deptToDelete by remember { mutableStateOf<Department?>(null) }
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Interns, 1 = Resource Books & Groups, 2 = Daily Marking
     val context = LocalContext.current
@@ -218,6 +224,17 @@ fun AdminPortalScreen(
                             }
                         }
                     )
+                    Tab(
+                        selected = selectedTab == 3,
+                        onClick = { selectedTab = 3 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Business, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Departments (${departments.size})", fontSize = 12.sp, fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal)
+                            }
+                        }
+                    )
                 }
             }
 
@@ -302,14 +319,14 @@ fun AdminPortalScreen(
                                     )
                                 )
                             }
-                            items(SAIL_DEPARTMENTS) { dept ->
-                                val count = interns.count { it.department.equals(dept, ignoreCase = true) }
+                            items(departments) { dept ->
+                                val count = interns.count { it.department.equals(dept.name, ignoreCase = true) }
                                 FilterChip(
-                                    selected = selectedDepartmentFilter == dept,
+                                    selected = selectedDepartmentFilter == dept.name,
                                     onClick = {
-                                        selectedDepartmentFilter = if (selectedDepartmentFilter == dept) null else dept
+                                        selectedDepartmentFilter = if (selectedDepartmentFilter == dept.name) null else dept.name
                                     },
-                                    label = { Text("$dept ($count)", fontSize = 10.sp) },
+                                    label = { Text("${dept.name} ($count)", fontSize = 10.sp) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -423,14 +440,64 @@ fun AdminPortalScreen(
                         }
                     )
                 }
+                3 -> {
+                    // TAB 3: Dynamic Plant Departments Management
+                    AdminDepartmentsSection(
+                        departments = departments,
+                        interns = interns,
+                        onAddDepartmentClick = { showAddDeptDialog = true },
+                        onDeleteDepartment = { deptToDelete = it }
+                    )
+                }
             }
         }
+    }
+
+
+    // Modal: Add Department
+    if (showAddDeptDialog) {
+        AddDepartmentModal(
+            onDismiss = { showAddDeptDialog = false },
+            onSave = { name, code, desc ->
+                AttendanceSystemRepository.addDepartment(name, code, desc)
+                showAddDeptDialog = false
+                scope.launch { snackbarHostState.showSnackbar("Department '$name' created.") }
+            }
+        )
+    }
+
+    // Modal: Delete Department Confirmation
+    if (deptToDelete != null) {
+        val target = deptToDelete!!
+        AlertDialog(
+            onDismissRequest = { deptToDelete = null },
+            title = { Text("Delete Department", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete '${target.name}'? This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        AttendanceSystemRepository.deleteDepartment(target.id)
+                        deptToDelete = null
+                        scope.launch { snackbarHostState.showSnackbar("Department '${target.name}' deleted.") }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete", color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { deptToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Modal 1: Dynamic QR Code Generator (Configurable Audience, Date & Expiry)
     if (showDynamicQrDialog) {
         DynamicDailyQrModal(
             groups = groups,
+            departments = departments,
             onDismiss = { showDynamicQrDialog = false },
             onShareWhatsApp = { _, message ->
                 ReportExportManager.shareGenericMessage(context, message)
@@ -612,7 +679,7 @@ fun AdminPortalScreen(
         var newEmail by remember { mutableStateOf("") }
         var newPhone by remember { mutableStateOf("") }
         var newCollege by remember { mutableStateOf("") }
-        var newDept by remember { mutableStateOf(selectedDepartmentFilter ?: "HRD Department") }
+        var newDept by remember { mutableStateOf(selectedDepartmentFilter ?: departments.firstOrNull()?.name ?: "") }
 
         Dialog(onDismissRequest = { showAddInternDialog = false }) {
             Card(
@@ -671,7 +738,7 @@ fun AdminPortalScreen(
     // Modal 5: Add Group / Book
     if (showAddGroupDialog) {
         var groupName by remember { mutableStateOf("") }
-        var groupDept by remember { mutableStateOf(selectedDepartmentFilter ?: "HRD Department") }
+        var groupDept by remember { mutableStateOf(selectedDepartmentFilter ?: departments.firstOrNull()?.name ?: "") }
         var groupDesc by remember { mutableStateOf("") }
 
         Dialog(onDismissRequest = { showAddGroupDialog = false }) {
@@ -858,12 +925,13 @@ fun AdminPortalScreen(
 @Composable
 private fun DynamicDailyQrModal(
     groups: List<InternGroup>,
+    departments: List<Department>,
     onDismiss: () -> Unit,
     onShareWhatsApp: (payload: AttendanceQrPayload, message: String) -> Unit
 ) {
     val context = LocalContext.current
     var selectedAudience by remember { mutableStateOf(QrTargetAudience.ALL) }
-    var selectedDepartment by remember { mutableStateOf(SAIL_DEPARTMENTS.first()) }
+    var selectedDepartment by remember { mutableStateOf(departments.firstOrNull()?.name ?: "") }
     var selectedGroupId by remember { mutableStateOf(groups.firstOrNull()?.id ?: "") }
 
     var deptDropdownExpanded by remember { mutableStateOf(false) }
@@ -1002,11 +1070,11 @@ private fun DynamicDailyQrModal(
                             expanded = deptDropdownExpanded,
                             onDismissRequest = { deptDropdownExpanded = false }
                         ) {
-                            SAIL_DEPARTMENTS.forEach { dept ->
+                            departments.forEach { dept ->
                                 DropdownMenuItem(
-                                    text = { Text(dept, fontSize = 12.sp) },
+                                    text = { Text(dept.name, fontSize = 12.sp) },
                                     onClick = {
-                                        selectedDepartment = dept
+                                        selectedDepartment = dept.name
                                         deptDropdownExpanded = false
                                     }
                                 )
@@ -1775,6 +1843,284 @@ private fun AdminQuickDailyMarkSection(
 
         item {
             Spacer(modifier = Modifier.height(84.dp))
+        }
+    }
+}
+
+
+@Composable
+private fun AdminDepartmentsSection(
+    departments: List<Department>,
+    interns: List<InternProfile>,
+    onAddDepartmentClick: () -> Unit,
+    onDeleteDepartment: (Department) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Plant Departments Management",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "All departments are created by the Admin and used dynamically in intern onboarding.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Button(
+                        onClick = onAddDepartmentClick,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add Dept", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
+            }
+        }
+
+        if (departments.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Business,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "No departments created yet.",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Dummy departments have been removed. Tap 'Add Dept' above to create plant departments.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            items(departments.size) { idx ->
+                val dept = departments[idx]
+                val enrolledCount = interns.count { it.department.equals(dept.name, ignoreCase = true) }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = dept.name,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (dept.code.isNotBlank()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Text(
+                                            text = dept.code,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            if (dept.description.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = dept.description,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "$enrolledCount Interns enrolled",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (enrolledCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { onDeleteDepartment(dept) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Department",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(84.dp))
+        }
+    }
+}
+
+@Composable
+private fun AddDepartmentModal(
+    onDismiss: () -> Unit,
+    onSave: (name: String, code: String, description: String) -> Unit
+) {
+    var deptName by remember { mutableStateOf("") }
+    var deptCode by remember { mutableStateOf("") }
+    var deptDesc by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "Create Plant Department",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Department will be immediately available in intern onboarding and reports.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = deptName,
+                    onValueChange = { deptName = it; errorMsg = null },
+                    label = { Text("Department Name *") },
+                    placeholder = { Text("e.g. Blast Furnace Operations") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = deptCode,
+                    onValueChange = { deptCode = it },
+                    label = { Text("Code / Abbreviation") },
+                    placeholder = { Text("e.g. BF-OPS") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = deptDesc,
+                    onValueChange = { deptDesc = it },
+                    label = { Text("Description (Optional)") },
+                    placeholder = { Text("e.g. Primary iron making division") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    maxLines = 2
+                )
+
+                if (errorMsg != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = errorMsg ?: "", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            if (deptName.isBlank()) {
+                                errorMsg = "Department name is required."
+                                return@Button
+                            }
+                            onSave(deptName.trim(), deptCode.trim(), deptDesc.trim())
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Create Department", color = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
+            }
         }
     }
 }

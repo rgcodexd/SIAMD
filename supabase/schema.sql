@@ -49,6 +49,15 @@ CREATE TABLE IF NOT EXISTS public.intern_groups (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 3c. DEPARTMENTS (Created dynamically by Admin)
+CREATE TABLE IF NOT EXISTS public.departments (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    code TEXT,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 4. OFFICIAL SAIL HOLIDAY CALENDAR
 -- Enforces policy: 3 National + 1 SAIL Day + 6 Festival + 1 Ambedkar Jayanti = 11 holidays
 CREATE TABLE IF NOT EXISTS public.holiday_calendar (

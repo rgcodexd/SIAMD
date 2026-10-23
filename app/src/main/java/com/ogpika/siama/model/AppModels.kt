@@ -21,14 +21,14 @@ data class InternProfile(
     val phone: String,
     val college: String,
     val joiningDate: LocalDate,
-    val department: String = "HRD Department",
+    val department: String = "",
     val groupId: String? = null,
     val groupName: String? = null,
     val internIdNumber: String? = null,
     val mentorName: String = "DGM Plant Operations",
     val address: String = "",
     val emergencyContact: String = "",
-    val authProvider: String = "EMAIL" // "GOOGLE" or "EMAIL"
+    val authProvider: String = "GOOGLE" // "GOOGLE" or "EMAIL"
 ) {
     val isProfileComplete: Boolean
         get() = fullName.isNotBlank() &&
@@ -38,15 +38,14 @@ data class InternProfile(
                 !internIdNumber.isNullOrBlank()
 }
 
-val SAIL_DEPARTMENTS = listOf(
-    "HRD Department",
-    "Plant Engineering & Maintenance",
-    "Blast Furnace & Iron Making",
-    "Steel Melting Shop (SMS)",
-    "Rolling Mills",
-    "IT & Automation Systems",
-    "Safety & Environment",
-    "Quality Assurance & R&D"
+/**
+ * Plant Department model dynamically created and managed by the Admin
+ */
+data class Department(
+    val id: String,
+    val name: String,
+    val code: String = "",
+    val description: String = ""
 )
 
 enum class QrTargetAudience(val label: String) {

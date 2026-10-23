@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,12 +18,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
@@ -33,9 +36,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -49,29 +53,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ogpika.siama.data.AttendanceSystemRepository
-import com.ogpika.siama.model.SAIL_DEPARTMENTS
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingProfileScreen(
     modifier: Modifier = Modifier
 ) {
     val interns by AttendanceSystemRepository.interns.collectAsState()
     val currentId by AttendanceSystemRepository.currentInternId.collectAsState()
+    val departments by AttendanceSystemRepository.departments.collectAsState()
     val currentProfile = interns.firstOrNull { it.id == currentId }
 
     var fullName by remember(currentProfile) { mutableStateOf(currentProfile?.fullName ?: "") }
-    var department by remember(currentProfile) { mutableStateOf(currentProfile?.department?.ifBlank { "HRD Department" } ?: "HRD Department") }
+    var department by remember(currentProfile) { mutableStateOf(currentProfile?.department ?: "") }
     var internIdNumber by remember(currentProfile) { mutableStateOf(currentProfile?.internIdNumber ?: currentProfile?.id ?: "SAIL-INT-2025-001") }
     var phone by remember(currentProfile) { mutableStateOf(currentProfile?.phone ?: "") }
     var college by remember(currentProfile) { mutableStateOf(currentProfile?.college ?: "") }
     var emergencyContact by remember(currentProfile) { mutableStateOf(currentProfile?.emergencyContact ?: "") }
     var address by remember(currentProfile) { mutableStateOf(currentProfile?.address ?: "") }
 
-    var isDeptDropdownOpen by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
 
@@ -84,86 +89,108 @@ fun OnboardingProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+                .padding(horizontal = 20.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ShikshaOne Minimal Header Badge
-            Surface(
-                shape = RoundedCornerShape(9999.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(9999.dp))
+            // Header Bar with Clean Cross Exit Button (No text saying "exit button")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "MANDATORY ONBOARDING",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                // Standard Cross Exit Sign
+                IconButton(
+                    onClick = { AttendanceSystemRepository.logout() },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Mandatory Onboarding • Step 1 of 1",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Exit to Login",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             Text(
                 text = "Complete Intern Profile",
-                fontSize = 24.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "Steel Authority of India Limited requires verified personal records before unlocking attendance, QR check-ins, and resource groups.",
-                fontSize = 13.sp,
+                text = "Please register your official plant training credentials to activate attendance logging and daily QR verification.",
+                fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 18.sp,
+                lineHeight = 16.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 8.dp)
+                modifier = Modifier.padding(horizontal = 12.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Profile Card (ShikshaOne styled with subtle 1px border and elevated background)
+            // Main Industrial Onboarding Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(20.dp)),
-                shape = RoundedCornerShape(20.dp),
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(modifier = Modifier.padding(18.dp)) {
 
-                    // Email Read-only Banner
+                    // Email Read-only Badge
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Email,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.secondary
+                                tint = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
-                                Text("Authenticated Account", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Authenticated Google Account", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(currentProfile?.email ?: "", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
@@ -171,7 +198,7 @@ fun OnboardingProfileScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Full Name
+                    // 1. Full Legal Name
                     OutlinedTextField(
                         value = fullName,
                         onValueChange = { fullName = it },
@@ -179,44 +206,48 @@ fun OnboardingProfileScreen(
                         placeholder = { Text("e.g. Rahul Sharma") },
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Department Selector Dropdown
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = department,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Department / Unit *") },
-                            leadingIcon = { Icon(Icons.Default.Business, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDropDown,
-                                    contentDescription = "Dropdown",
-                                    modifier = Modifier.clickable { isDeptDropdownOpen = !isDeptDropdownOpen }
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { isDeptDropdownOpen = !isDeptDropdownOpen },
-                            shape = RoundedCornerShape(12.dp)
-                        )
+                    // 2. Department (Standard Text Field - NO DROPDOWN)
+                    OutlinedTextField(
+                        value = department,
+                        onValueChange = { department = it },
+                        label = { Text("Department / Unit *") },
+                        placeholder = { Text("e.g. HRD, RMSP, Plant Maintenance") },
+                        leadingIcon = { Icon(Icons.Default.Business, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
 
-                        DropdownMenu(
-                            expanded = isDeptDropdownOpen,
-                            onDismissRequest = { isDeptDropdownOpen = false }
+                    // Quick Department Selection Chips (from Admin-created departments)
+                    if (departments.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Admin Created Units (Tap to select):",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            SAIL_DEPARTMENTS.forEach { dept ->
-                                DropdownMenuItem(
-                                    text = { Text(dept, fontSize = 13.sp) },
-                                    onClick = {
-                                        department = dept
-                                        isDeptDropdownOpen = false
-                                    }
+                            departments.forEach { dept ->
+                                val isSelected = department.equals(dept.name, ignoreCase = true)
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { department = dept.name },
+                                    label = { Text(dept.name, fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                    )
                                 )
                             }
                         }
@@ -224,7 +255,7 @@ fun OnboardingProfileScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Intern Roll / ID
+                    // 3. Intern Roll / ID
                     OutlinedTextField(
                         value = internIdNumber,
                         onValueChange = { internIdNumber = it },
@@ -232,13 +263,13 @@ fun OnboardingProfileScreen(
                         placeholder = { Text("e.g. SAIL-INT-2025-042") },
                         leadingIcon = { Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Phone Number
+                    // 4. Phone Number
                     OutlinedTextField(
                         value = phone,
                         onValueChange = { phone = it },
@@ -246,41 +277,41 @@ fun OnboardingProfileScreen(
                         placeholder = { Text("+91 98765 43210") },
                         leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // College / University
+                    // 5. College / Institute
                     OutlinedTextField(
                         value = college,
                         onValueChange = { college = it },
-                        label = { Text("College / University *") },
-                        placeholder = { Text("e.g. IIT Kharagpur / NIT Rourkela") },
+                        label = { Text("College / Institute *") },
+                        placeholder = { Text("e.g. NIT Rourkela / IIT Kharagpur") },
                         leadingIcon = { Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Emergency Contact
+                    // 6. Emergency Contact
                     OutlinedTextField(
                         value = emergencyContact,
                         onValueChange = { emergencyContact = it },
-                        label = { Text("Emergency Contact (Guardian/Parent) *") },
+                        label = { Text("Emergency Contact (Parent / Guardian) *") },
                         placeholder = { Text("+91 98765 11111") },
                         leadingIcon = { Icon(Icons.Default.ContactPhone, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Local Hostel / Address
+                    // 7. Local Hostel / Residence Address
                     OutlinedTextField(
                         value = address,
                         onValueChange = { address = it },
@@ -288,7 +319,7 @@ fun OnboardingProfileScreen(
                         placeholder = { Text("e.g. SAIL Trainee Hostel, Sector 4") },
                         leadingIcon = { Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         singleLine = true
                     )
 
@@ -298,13 +329,15 @@ fun OnboardingProfileScreen(
                             Text(
                                 text = errorMessage ?: "",
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.error
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
+                    // Submit Button (Full width, horizontal label, high contrast)
                     Button(
                         onClick = {
                             if (fullName.isBlank()) {
@@ -312,7 +345,7 @@ fun OnboardingProfileScreen(
                                 return@Button
                             }
                             if (department.isBlank()) {
-                                errorMessage = "Please select your department."
+                                errorMessage = "Please enter your department."
                                 return@Button
                             }
                             if (internIdNumber.isBlank()) {
@@ -348,12 +381,15 @@ fun OnboardingProfileScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(12.dp),
+                            .height(48.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         enabled = !isSubmitting
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = null,
@@ -362,8 +398,8 @@ fun OnboardingProfileScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Save Profile & Unlock Dashboard",
-                                fontSize = 14.sp,
+                                text = if (isSubmitting) "Registering Profile..." else "Save Profile & Enter Dashboard",
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimary
                             )

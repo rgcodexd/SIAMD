@@ -41,6 +41,32 @@ object AttendanceSystemRepository {
         _isDarkMode.value = !_isDarkMode.value
     }
 
+    // 2b. Plant Departments (Created dynamically by Admin, no dummy data)
+    private val _departments = MutableStateFlow<List<Department>>(emptyList())
+    val departments: StateFlow<List<Department>> = _departments.asStateFlow()
+
+    fun addDepartment(name: String, code: String = "", description: String = "") {
+        val cleanName = name.trim()
+        if (cleanName.isBlank()) return
+        val id = "DEPT-${System.currentTimeMillis() % 100000}"
+        val dept = Department(id = id, name = cleanName, code = code.trim(), description = description.trim())
+        _departments.value = _departments.value + dept
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.insertDepartment(dept)
+            }
+        }
+    }
+
+    fun deleteDepartment(id: String) {
+        _departments.value = _departments.value.filterNot { it.id == id }
+        if (SupabaseConfig.isConfigured()) {
+            repositoryScope.launch {
+                SupabaseClient.deleteDepartment(id)
+            }
+        }
+    }
+
     // 2. Groups / Books (Clean state, no dummy records)
     private val _groups = MutableStateFlow<List<InternGroup>>(emptyList())
     val groups: StateFlow<List<InternGroup>> = _groups.asStateFlow()
@@ -64,10 +90,11 @@ object AttendanceSystemRepository {
         if (!SupabaseConfig.isConfigured()) return
 
         repositoryScope.launch {
+            val remoteDepts = SupabaseClient.fetchDepartments()
+            _departments.value = remoteDepts
+
             val remoteInterns = SupabaseClient.fetchInternProfiles()
-            if (remoteInterns.isNotEmpty()) {
-                _interns.value = remoteInterns
-            }
+            _interns.value = remoteInterns
 
             val remoteGroups = SupabaseClient.fetchInternGroups()
             if (remoteGroups.isNotEmpty()) {
@@ -100,46 +127,65 @@ object AttendanceSystemRepository {
         return false
     }
 
-    fun loginWithGoogle(email: String, displayName: String): Pair<Boolean, Boolean> {
+    fun loginWithGoogle(email: String, displayName: String, onComplete: ((Boolean) -> Unit)? = null) {
         val cleanEmail = email.trim()
-        if (cleanEmail.isBlank()) return Pair(false, false)
+        if (cleanEmail.isBlank()) {
+            onComplete?.invoke(false)
+            return
+        }
 
-        var profile = _interns.value.firstOrNull { it.email.equals(cleanEmail, ignoreCase = true) }
-        val isNew = profile == null
+        repositoryScope.launch {
+            // 1. Check if user profile already exists remotely in Supabase
+            var existingProfile = if (SupabaseConfig.isConfigured()) {
+                SupabaseClient.fetchProfileByEmail(cleanEmail)
+            } else null
 
-        if (profile == null) {
-            val count = _interns.value.size + 1
-            val newId = "SAIL-INT-2025-${String.format("%03d", count)}"
-            profile = InternProfile(
-                id = newId,
-                email = cleanEmail,
-                fullName = displayName.ifBlank { cleanEmail.substringBefore("@").replace(".", " ").capitalize() },
-                phone = "",
-                college = "",
-                joiningDate = LocalDate.now(),
-                department = "",
-                internIdNumber = newId,
-                authProvider = "GOOGLE"
-            )
-            _interns.value = _interns.value + profile
+            // 2. Fallback to local memory cache
+            if (existingProfile == null) {
+                existingProfile = _interns.value.firstOrNull { it.email.equals(cleanEmail, ignoreCase = true) }
+            }
 
-            if (SupabaseConfig.isConfigured()) {
-                repositoryScope.launch {
+            val profile: InternProfile
+            val isNew = existingProfile == null
+
+            if (existingProfile != null) {
+                profile = existingProfile
+                // Ensure local state contains this profile
+                if (_interns.value.none { it.id == profile.id }) {
+                    _interns.value = _interns.value + profile
+                }
+            } else {
+                val count = _interns.value.size + 1
+                val newId = "SAIL-INT-${LocalDate.now().year}-${String.format("%03d", count)}"
+                val name = displayName.ifBlank { cleanEmail.substringBefore("@").replace(".", " ").capitalize() }
+                profile = InternProfile(
+                    id = newId,
+                    email = cleanEmail,
+                    fullName = name,
+                    phone = "",
+                    college = "",
+                    joiningDate = LocalDate.now(),
+                    department = "Plant Engineering",
+                    internIdNumber = newId,
+                    authProvider = "GOOGLE"
+                )
+                _interns.value = _interns.value + profile
+
+                if (SupabaseConfig.isConfigured()) {
                     SupabaseClient.insertInternProfile(profile)
                 }
             }
-        }
 
-        _isLoggedIn.value = true
-        _currentUserRole.value = UserRole.INTERN
-        _currentInternId.value = profile.id
+            _isLoggedIn.value = true
+            _currentUserRole.value = UserRole.INTERN
+            _currentInternId.value = profile.id
 
-        val complete = profile.isProfileComplete
-        _needsOnboarding.value = !complete
+            // Check if mandatory onboarding is needed
+            val complete = profile.isProfileComplete
+            _needsOnboarding.value = !complete
 
-        // Fetch attendance logs for this intern
-        if (SupabaseConfig.isConfigured()) {
-            repositoryScope.launch {
+            // Fetch attendance logs for this intern
+            if (SupabaseConfig.isConfigured()) {
                 val logs = SupabaseClient.fetchAttendanceLogs(profile.id)
                 if (logs.isNotEmpty()) {
                     val current = _attendanceMap.value.toMutableMap()
@@ -147,9 +193,9 @@ object AttendanceSystemRepository {
                     _attendanceMap.value = current
                 }
             }
-        }
 
-        return Pair(true, complete)
+            onComplete?.invoke(true)
+        }
     }
 
     fun loginAsIntern(email: String): Boolean {
@@ -187,35 +233,55 @@ object AttendanceSystemRepository {
         address: String
     ): Boolean {
         val currentId = _currentInternId.value ?: return false
+        val currentProfile = _interns.value.firstOrNull { it.id == currentId }
+
+        val targetDept = department.trim().ifBlank { "Plant Engineering" }
+
+        val updated = currentProfile?.copy(
+            fullName = fullName.trim(),
+            department = targetDept,
+            internIdNumber = internIdNumber.trim(),
+            phone = phone.trim(),
+            college = college.trim(),
+            emergencyContact = emergencyContact.trim(),
+            address = address.trim()
+        ) ?: InternProfile(
+            id = currentId,
+            email = "",
+            fullName = fullName.trim(),
+            phone = phone.trim(),
+            college = college.trim(),
+            joiningDate = LocalDate.now(),
+            department = targetDept,
+            internIdNumber = internIdNumber.trim(),
+            emergencyContact = emergencyContact.trim(),
+            address = address.trim()
+        )
 
         _interns.value = _interns.value.map {
-            if (it.id == currentId) {
-                it.copy(
-                    fullName = fullName.trim(),
-                    department = department.trim(),
-                    internIdNumber = internIdNumber.trim(),
-                    phone = phone.trim(),
-                    college = college.trim(),
-                    emergencyContact = emergencyContact.trim(),
-                    address = address.trim()
-                )
-            } else it
+            if (it.id == currentId) updated else it
         }
 
         _needsOnboarding.value = false
 
         if (SupabaseConfig.isConfigured()) {
             repositoryScope.launch {
+                SupabaseClient.insertInternProfile(updated)
                 SupabaseClient.updateMandatoryProfile(
                     id = currentId,
+                    email = updated.email,
                     fullName = fullName.trim(),
                     phone = phone.trim(),
                     college = college.trim(),
-                    department = department.trim(),
+                    department = targetDept,
                     internIdNumber = internIdNumber.trim(),
                     emergencyContact = emergencyContact.trim(),
                     address = address.trim()
                 )
+                val refreshed = SupabaseClient.fetchInternProfiles()
+                if (refreshed.isNotEmpty()) {
+                    _interns.value = refreshed
+                }
             }
         }
 

@@ -739,7 +739,7 @@ private fun LeaveQuotaAndApplicationCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                     Text(
                         text = "Sanctioned Leaves Entitlement",
                         fontSize = 13.sp,
@@ -757,12 +757,14 @@ private fun LeaveQuotaAndApplicationCard(
                     onClick = onApplyClick,
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.height(32.dp)
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp)
                 ) {
                     Text(
                         text = "Apply Leave",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 }

@@ -1,11 +1,11 @@
 -- =====================================================================
 -- SAIL INTERN ATTENDANCE MANAGEMENT APPLICATION (SIAMD)
--- AUTOMATED ABSENTEEISM SCHEDULER (Supabase pg_cron / Edge Function)
+-- AUTOMATED ABSENTEEISM SCHEDULER (Supabase pg_cron / Stored Function)
 -- =====================================================================
 
 -- 1. Create the Stored Procedure to Auto-Mark Absenteeism
--- This function runs daily at the specified cutoff time (e.g., 18:00 IST / Midnight).
--- Any intern who has not scanned today's Secret Attendance QR code is marked ABSENT.
+-- This function runs daily at the specified cutoff time (e.g., 18:00 IST / 12:30 UTC).
+-- Any active intern who has not scanned today's attendance QR code is marked ABSENT.
 CREATE OR REPLACE FUNCTION public.auto_mark_daily_absenteeism(target_date DATE DEFAULT CURRENT_DATE)
 RETURNS TABLE(marked_count INT, target DATE) 
 LANGUAGE plpgsql
@@ -34,36 +34,34 @@ BEGIN
     WITH unmarked_interns AS (
         SELECT p.id AS intern_id
         FROM public.profiles p
-        WHERE p.role = 'intern'
-          AND p.joining_date <= target_date
+        WHERE p.role = 'INTERN'
+          AND p.internship_start_date <= target_date
           AND NOT EXISTS (
               SELECT 1 
               FROM public.attendance_logs a 
               WHERE a.intern_id = p.id 
-                AND a.record_date = target_date
+                AND a.attendance_date = target_date
           )
     )
     INSERT INTO public.attendance_logs (
         id,
         intern_id,
-        record_date,
+        attendance_date,
         status,
-        check_in_time,
-        marked_by,
-        remarks,
+        scan_time,
+        location_verified,
         created_at
     )
     SELECT
-        intern_id || '-' || target_date::TEXT,
+        uuid_generate_v4(),
         intern_id,
         target_date,
         'ABSENT',
         NULL,
-        'Automated Absenteeism Scheduler (pg_cron)',
-        'Auto-marked absent: Daily QR attendance was not scanned before cutoff time.',
+        FALSE,
         NOW()
     FROM unmarked_interns
-    ON CONFLICT (id) DO NOTHING;
+    ON CONFLICT (intern_id, attendance_date) DO NOTHING;
 
     GET DIAGNOSTICS inserted_rows = ROW_COUNT;
 
@@ -75,27 +73,36 @@ $$;
 GRANT EXECUTE ON FUNCTION public.auto_mark_daily_absenteeism(DATE) TO postgres, anon, authenticated, service_role;
 
 -- =====================================================================
--- 2. Schedule with pg_cron (Daily Cutoff at 18:30 IST / 13:00 UTC)
+-- 2. Schedule with pg_cron (Daily Cutoff at 18:00 IST / 12:30 UTC)
 -- Note: Enable the pg_cron extension from your Supabase Dashboard:
 -- Database -> Extensions -> search for "pg_cron" -> Enable.
 -- =====================================================================
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
--- Remove any old scheduled job if it exists
+-- Remove any old scheduled job if it exists (safely catch if pg_cron is disabled)
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'sail_daily_absenteeism_cutoff') THEN
         PERFORM cron.unschedule('sail_daily_absenteeism_cutoff');
     END IF;
+EXCEPTION
+    WHEN undefined_table THEN
+        NULL;
 END $$;
 
--- Schedule job to run daily at 18:00 IST (12:30 UTC):
+-- Schedule job to run daily Monday to Saturday at 18:00 IST (12:30 UTC):
 -- '30 12 * * 1-6' runs Monday through Saturday at 12:30 UTC (18:00 IST)
-SELECT cron.schedule(
-    'sail_daily_absenteeism_cutoff',
-    '30 12 * * 1-6',
-    'SELECT public.auto_mark_daily_absenteeism(CURRENT_DATE);'
-);
+DO $$
+BEGIN
+    PERFORM cron.schedule(
+        'sail_daily_absenteeism_cutoff',
+        '30 12 * * 1-6',
+        'SELECT public.auto_mark_daily_absenteeism(CURRENT_DATE);'
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
+END $$;
 
 -- =====================================================================
 -- 3. Verification Query:
