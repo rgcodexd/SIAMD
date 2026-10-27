@@ -124,6 +124,11 @@ fun AdminPortalScreen(
 
     // Modals
     var showDynamicQrDialog by remember { mutableStateOf(false) }
+
+    // Auto-sync with live Supabase database on portal open
+    LaunchedEffect(Unit) {
+        AttendanceSystemRepository.syncWithSupabase()
+    }
     var showAddInternDialog by remember { mutableStateOf(false) }
     var showAddGroupDialog by remember { mutableStateOf(false) }
     var inspectInternForCalendar by remember { mutableStateOf<InternProfile?>(null) }
@@ -469,28 +474,48 @@ fun AdminPortalScreen(
     // Modal: Delete Department Confirmation
     if (deptToDelete != null) {
         val target = deptToDelete!!
-        AlertDialog(
-            onDismissRequest = { deptToDelete = null },
-            title = { Text("Delete Department", fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to delete '${target.name}'? This cannot be undone.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        AttendanceSystemRepository.deleteDepartment(target.id)
-                        deptToDelete = null
-                        scope.launch { snackbarHostState.showSnackbar("Department '${target.name}' deleted.") }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Delete", color = Color.White)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { deptToDelete = null }) {
-                    Text("Cancel")
+        Dialog(onDismissRequest = { deptToDelete = null }) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Delete Department", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                        IconButton(onClick = { deptToDelete = null }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "Are you sure you want to delete '${target.name}'? This cannot be undone.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            AttendanceSystemRepository.deleteDepartment(target.id)
+                            deptToDelete = null
+                            scope.launch { snackbarHostState.showSnackbar("Department '${target.name}' deleted.") }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete Department", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
             }
-        )
+        }
     }
 
     // Modal 1: Dynamic QR Code Generator (Configurable Audience, Date & Expiry)
@@ -574,18 +599,37 @@ fun AdminPortalScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "Mark Attendance",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "${intern.fullName} • ${date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy"))}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Mark Attendance",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${intern.fullName} • ${date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy"))}",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        IconButton(
+                            onClick = { internForAttendanceMarking = null },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -641,32 +685,26 @@ fun AdminPortalScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                    Button(
+                        onClick = {
+                            AttendanceSystemRepository.markAttendance(
+                                internId = intern.id,
+                                date = date,
+                                status = selectedStatus,
+                                remarks = remarks.ifBlank { "Marked by Admin" }
+                            )
+                            internForAttendanceMarking = null
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Marked ${intern.fullName} as ${selectedStatus.label} on $date")
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        OutlinedButton(onClick = { internForAttendanceMarking = null }, shape = RoundedCornerShape(8.dp)) {
-                            Text("Cancel")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                AttendanceSystemRepository.markAttendance(
-                                    internId = intern.id,
-                                    date = date,
-                                    status = selectedStatus,
-                                    remarks = remarks.ifBlank { "Marked by Admin" }
-                                )
-                                internForAttendanceMarking = null
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Marked ${intern.fullName} as ${selectedStatus.label} on $date")
-                                }
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("Save Status", color = MaterialTheme.colorScheme.onPrimary)
-                        }
+                        Text("Save Status", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }
@@ -689,10 +727,30 @@ fun AdminPortalScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text(text = "Add New Intern", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text(text = "Register intern in plant database", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = "Add New Intern", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(text = "Register intern in plant database", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        IconButton(
+                            onClick = { showAddInternDialog = false },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Full Name *") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), singleLine = true)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -706,29 +764,28 @@ fun AdminPortalScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        OutlinedButton(onClick = { showAddInternDialog = false }, shape = RoundedCornerShape(8.dp)) { Text("Cancel") }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (newName.isNotBlank() && newEmail.isNotBlank()) {
-                                    AttendanceSystemRepository.registerNewIntern(
-                                        email = newEmail,
-                                        fullName = newName,
-                                        phone = newPhone,
-                                        college = newCollege,
-                                        joiningDate = LocalDate.now(),
-                                        department = newDept
-                                    )
-                                    showAddInternDialog = false
-                                    scope.launch { snackbarHostState.showSnackbar("Intern added successfully.") }
-                                }
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("Save Intern", color = MaterialTheme.colorScheme.onPrimary)
-                        }
+                    Button(
+                        onClick = {
+                            if (newName.isNotBlank() && newEmail.isNotBlank()) {
+                                AttendanceSystemRepository.registerNewIntern(
+                                    email = newEmail,
+                                    fullName = newName,
+                                    phone = newPhone,
+                                    college = newCollege,
+                                    joiningDate = LocalDate.now(),
+                                    department = newDept
+                                )
+                                showAddInternDialog = false
+                                scope.launch { snackbarHostState.showSnackbar("Intern added successfully.") }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Save Intern", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }
@@ -749,10 +806,29 @@ fun AdminPortalScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text(text = "Create Resource Book / Group", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text(text = "Organize interns by joining batch and department", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = "Create Resource Book / Group", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(text = "Organize interns by joining batch and department", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(
+                            onClick = { showAddGroupDialog = false },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     OutlinedTextField(value = groupName, onValueChange = { groupName = it }, label = { Text("Group Name * (e.g. Batch 15-Mar-2025)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), singleLine = true)
                     Spacer(modifier = Modifier.height(8.dp))
@@ -762,27 +838,26 @@ fun AdminPortalScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        OutlinedButton(onClick = { showAddGroupDialog = false }, shape = RoundedCornerShape(8.dp)) { Text("Cancel") }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (groupName.isNotBlank()) {
-                                    AttendanceSystemRepository.addGroup(
-                                        name = groupName,
-                                        joiningDate = LocalDate.now(),
-                                        department = groupDept,
-                                        description = groupDesc
-                                    )
-                                    showAddGroupDialog = false
-                                    scope.launch { snackbarHostState.showSnackbar("Resource book created.") }
-                                }
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("Create Book", color = MaterialTheme.colorScheme.onPrimary)
-                        }
+                    Button(
+                        onClick = {
+                            if (groupName.isNotBlank()) {
+                                AttendanceSystemRepository.addGroup(
+                                    name = groupName,
+                                    joiningDate = LocalDate.now(),
+                                    department = groupDept,
+                                    description = groupDesc
+                                )
+                                showAddGroupDialog = false
+                                scope.launch { snackbarHostState.showSnackbar("Resource book created.") }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Create Book", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }
@@ -889,28 +964,36 @@ fun AdminPortalScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text(text = "Delete Intern Record", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "Delete Intern Record", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                        IconButton(onClick = { internToDelete = null }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = "Are you sure you want to remove ${intern.fullName} (${intern.id})? All historical attendance records will be permanently deleted.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        OutlinedButton(onClick = { internToDelete = null }, shape = RoundedCornerShape(8.dp)) { Text("Cancel") }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                AttendanceSystemRepository.deleteIntern(intern.id)
-                                internToDelete = null
-                                scope.launch { snackbarHostState.showSnackbar("Intern deleted.") }
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Text("Delete", color = Color.White)
-                        }
+                    Button(
+                        onClick = {
+                            AttendanceSystemRepository.deleteIntern(intern.id)
+                            internToDelete = null
+                            scope.launch { snackbarHostState.showSnackbar("Intern deleted.") }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete Intern Record", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -1429,21 +1512,21 @@ private fun AdminInternsListSection(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Action Buttons Row: Calendar, Mark, Export PDF, Export Excel
+                        // Action Buttons: Two spacious rows ensuring clean, horizontal, readable layout
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             OutlinedButton(
                                 onClick = { onInspectCalendar(intern) },
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .height(36.dp)
                             ) {
-                                Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Calendar", fontSize = 10.sp)
+                                Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Calendar", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             }
 
                             OutlinedButton(
@@ -1451,24 +1534,31 @@ private fun AdminInternsListSection(
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .height(36.dp)
                             ) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Mark", fontSize = 10.sp)
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Mark Status", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             }
+                        }
 
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             Button(
                                 onClick = { onExportPdf(intern) },
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .height(36.dp)
                             ) {
-                                Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("PDF", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary)
+                                Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Export PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                             }
 
                             Button(
@@ -1477,11 +1567,11 @@ private fun AdminInternsListSection(
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(32.dp)
+                                    .height(36.dp)
                             ) {
-                                Icon(Icons.Default.TableChart, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(12.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Excel", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(Icons.Default.TableChart, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Export Excel", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -2043,17 +2133,37 @@ private fun AddDepartmentModal(
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = "Create Plant Department",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Department will be immediately available in intern onboarding and reports.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Create Plant Department",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Admin & Maintainer Dynamic Department Setup",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -2061,7 +2171,7 @@ private fun AddDepartmentModal(
                     value = deptName,
                     onValueChange = { deptName = it; errorMsg = null },
                     label = { Text("Department Name *") },
-                    placeholder = { Text("e.g. Blast Furnace Operations") },
+                    placeholder = { Text("e.g. HRD, RMSP, Plant Maintenance") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
                     singleLine = true
@@ -2073,7 +2183,7 @@ private fun AddDepartmentModal(
                     value = deptCode,
                     onValueChange = { deptCode = it },
                     label = { Text("Code / Abbreviation") },
-                    placeholder = { Text("e.g. BF-OPS") },
+                    placeholder = { Text("e.g. HRD, RMSP") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
                     singleLine = true
@@ -2085,7 +2195,7 @@ private fun AddDepartmentModal(
                     value = deptDesc,
                     onValueChange = { deptDesc = it },
                     label = { Text("Description (Optional)") },
-                    placeholder = { Text("e.g. Primary iron making division") },
+                    placeholder = { Text("e.g. Human Resource Development division") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
                     maxLines = 2
@@ -2098,27 +2208,21 @@ private fun AddDepartmentModal(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                Button(
+                    onClick = {
+                        if (deptName.isBlank()) {
+                            errorMsg = "Department name is required."
+                            return@Button
+                        }
+                        onSave(deptName.trim(), deptCode.trim(), deptDesc.trim())
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) {
-                        Text("Cancel")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            if (deptName.isBlank()) {
-                                errorMsg = "Department name is required."
-                                return@Button
-                            }
-                            onSave(deptName.trim(), deptCode.trim(), deptDesc.trim())
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Create Department", color = MaterialTheme.colorScheme.onPrimary)
-                    }
+                    Text("Create Department", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }

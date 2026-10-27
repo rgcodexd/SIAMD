@@ -733,16 +733,16 @@ private fun LeaveQuotaAndApplicationCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Sanctioned Leaves Entitlement",
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -753,24 +753,21 @@ private fun LeaveQuotaAndApplicationCard(
                     )
                 }
 
-                Button(
-                    onClick = onApplyClick,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                    modifier = Modifier.height(34.dp)
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (remainingDays > 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer
                 ) {
                     Text(
-                        text = "Apply Leave",
+                        text = "$remainingDays Days Left",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = if (remainingDays > 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             LinearProgressIndicator(
                 progress = progress,
@@ -800,6 +797,37 @@ private fun LeaveQuotaAndApplicationCard(
                     color = if (remainingDays > 0) StatusPresent else StatusAbsent
                 )
             }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Premium Full-Width Horizontal Action Button (never wrapped vertically!)
+            Button(
+                onClick = onApplyClick,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.EventNote,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Apply for Leave",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
         }
     }
 }
@@ -826,19 +854,40 @@ private fun ComprehensiveApplyLeaveModal(
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = "Apply for Leave",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Leaves are subject to 12-day entitlement rules and exclude Sundays and SAIL holidays",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // Header with Clean Cross Exit Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Apply for Leave",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Excludes Sundays and SAIL official holidays",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 OutlinedTextField(
                     value = startDateText,
@@ -866,7 +915,7 @@ private fun ComprehensiveApplyLeaveModal(
                     value = reasonText,
                     onValueChange = { reasonText = it; errorMsg = null },
                     label = { Text("Reason for Leave *") },
-                    placeholder = { Text("e.g. University Exam / Health") },
+                    placeholder = { Text("e.g. University Exam / Medical") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
                     minLines = 2
@@ -882,7 +931,7 @@ private fun ComprehensiveApplyLeaveModal(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
@@ -891,45 +940,40 @@ private fun ComprehensiveApplyLeaveModal(
                 ) {
                     Text(
                         text = "Current Sanctioned Balance: $remainingQuota days remaining.",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(8.dp)
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(10.dp)
                     )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) {
-                        Text("Cancel")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            try {
-                                val s = LocalDate.parse(startDateText.trim())
-                                val e = LocalDate.parse(endDateText.trim())
-                                if (e.isBefore(s)) {
-                                    errorMsg = "End date cannot precede start date."
-                                    return@Button
-                                }
-                                if (reasonText.isBlank()) {
-                                    errorMsg = "Please describe the reason for your leave."
-                                    return@Button
-                                }
-                                onSubmit(s, e, reasonText.trim())
-                            } catch (ex: Exception) {
-                                errorMsg = "Invalid date format. Use YYYY-MM-DD (e.g. 2025-03-20)."
+                Button(
+                    onClick = {
+                        try {
+                            val s = LocalDate.parse(startDateText.trim())
+                            val e = LocalDate.parse(endDateText.trim())
+                            if (e.isBefore(s)) {
+                                errorMsg = "End date cannot precede start date."
+                                return@Button
                             }
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Submit Application", color = MaterialTheme.colorScheme.onPrimary)
-                    }
+                            if (reasonText.isBlank()) {
+                                errorMsg = "Please describe the reason for your leave."
+                                return@Button
+                            }
+                            onSubmit(s, e, reasonText.trim())
+                        } catch (ex: Exception) {
+                            errorMsg = "Invalid date format. Use YYYY-MM-DD (e.g. 2025-03-20)."
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Submit Leave Application", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }
@@ -1261,17 +1305,33 @@ private fun EditProfileDialog(
             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = "Edit Personal Details",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Users can update contact and college details",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Edit Personal Details",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Update contact and college details",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -1315,21 +1375,15 @@ private fun EditProfileDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                Button(
+                    onClick = { onSave(phone, college, address, emergency) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(8.dp)) {
-                        Text("Cancel")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { onSave(phone, college, address, emergency) },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Save Details", color = MaterialTheme.colorScheme.onPrimary)
-                    }
+                    Text("Save Details", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }
